@@ -1,0 +1,11 @@
+*.o
+*.swp
+*.gz
+*.txt
+*.stm
+*.seq
+*.ele
+*.node
+*.poly
+kmeans/result_log/*
+kmeans/inputs/*

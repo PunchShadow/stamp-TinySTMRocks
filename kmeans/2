@@ -1,0 +1,42 @@
+# ==============================================================================
+#
+# Makefile.stm
+#
+# ==============================================================================
+
+
+# ==============================================================================
+# Variables
+# ==============================================================================
+
+CFLAGS   += -DSTM -I$(STM)/include
+CPPFLAGS := $(CFLAGS)
+LDFLAGS  += -L$(STM)/lib
+LDFLAGS  += -L$(STM)/pcm # PCM integral
+LIBS     += -lstm
+# PCM wrapper
+PCMLINK += wrapper.o cpucounters.o pci.o mmio.o client_bw.o utils.o topology.o
+PCMLINK += dashboard.o debug.o threadpool.o resctrl.o msr.o -lrt
+
+# ==============================================================================
+# Rules
+# ==============================================================================
+
+.PHONY: default
+default: $(PROG)
+
+.PHONY: clean
+clean:
+	$(RM) $(OBJS) $(PROG) $(OUTPUT)
+
+$(PROG): $(OBJS)
+	$(LD) $(LDFLAGS) $^ $(LIBS) $(PCMLINK) -o $(PROG).stm
+
+include ../common/Makefile.common
+
+
+# ==============================================================================
+#
+# End of Makefile.stm
+#
+# ==============================================================================

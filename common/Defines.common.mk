@@ -6,7 +6,7 @@
 
 
 CC       := gcc
-CFLAGS   += -g -Wall -pthread
+CFLAGS   += -Wall -pthread
 CFLAGS   += -O3
 CFLAGS   += -I$(LIB)
 CPP      := g++
@@ -19,7 +19,7 @@ OUTPUT +=
 
 LIB := ../lib
 
-STM := ../../tl2
+STM := ../../TinySTMRocks
 
 LOSTM := ../../OpenTM/lostm
 

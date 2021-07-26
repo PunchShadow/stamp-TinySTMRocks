@@ -96,6 +96,18 @@ long     global_totalNumAdded = 0;
 long     global_numProcess    = 0;
 
 
+
+/* Debug for stack and heap */
+void check(int depth) {
+    char c;
+    char *ptr = malloc(1);
+    printf("stack at %p, heap at %p\n", &c, ptr);
+    if (depth <= 0) return;
+    check(depth-1);
+}
+
+
+
 /* =============================================================================
  * displayUsage
  * =============================================================================
@@ -189,6 +201,10 @@ initializeWork (heap_t* workHeapPtr, mesh_t* meshPtr)
 void
 process ()
 {
+    
+    int tid = pthread_self();
+
+    //printf("Enter thread: %d\n", tid);
     TM_THREAD_ENTER();
 
     heap_t* workHeapPtr = global_workHeapPtr;
@@ -196,12 +212,15 @@ process ()
     region_t* regionPtr;
     long totalNumAdded = 0;
     long numProcess = 0;
-
+    int loop_count = 0;
     regionPtr = PREGION_ALLOC();
     assert(regionPtr);
 
     while (1) {
-
+        
+        //printf("%d: loop_count %d\n", tid, loop_count);
+        loop_count ++;        
+        
         element_t* elementPtr;
 
         TM_BEGIN();
@@ -248,8 +267,11 @@ process ()
         TM_END();
 
         numProcess++;
+        printf("Number of process: %ld\n", numProcess);
+        
 
     }
+    printf("Finish loop\n");
 
     TM_BEGIN();
     TM_SHARED_WRITE(global_totalNumAdded,

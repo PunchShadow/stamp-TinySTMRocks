@@ -17,7 +17,7 @@ clean:
 	$(RM) $(OBJS) $(PROG) $(OUTPUT)
 
 $(PROG): $(OBJS)
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $(PROG)
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $(PROG).seq
 
 include ../common/Makefile.common
 

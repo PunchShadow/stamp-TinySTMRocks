@@ -9,11 +9,15 @@
 # Variables
 # ==============================================================================
 
-CFLAGS   += -DSTM -I$(STM)
+CFLAGS   += -DSTM -I$(STM)/include
 CPPFLAGS := $(CFLAGS)
-LDFLAGS  += -L$(STM)
-LIBS     += -ltl2
-
+LDFLAGS  += -L$(STM)/lib
+LDFLAGS  += -L$(STM)/pcm # PCM integral
+LIBS     += -lstm
+LIBS     += -lPCM
+# PCM wrapper
+PCMLIBS += wrapper.o cpucounters.o pci.o mmio.o client_bw.o utils.o topology.o
+PCMLIBS += dashboard.o debug.o threadpool.o resctrl.o msr.o -lrt
 
 # ==============================================================================
 # Rules
@@ -27,7 +31,7 @@ clean:
 	$(RM) $(OBJS) $(PROG) $(OUTPUT)
 
 $(PROG): $(OBJS)
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $(PROG)
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $(PROG).stm
 
 include ../common/Makefile.common
 
