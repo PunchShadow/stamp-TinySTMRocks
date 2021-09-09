@@ -323,6 +323,11 @@ static void
 createTaskList (void* argPtr)
 {
     TM_THREAD_ENTER();
+    long v;
+
+    long v_start;
+    long v_stop;
+    
 
     long myId = thread_getId();
     long numThread = thread_getNumThread();
@@ -330,11 +335,20 @@ createTaskList (void* argPtr)
     learner_t* learnerPtr = (learner_t*)argPtr;
     list_t* taskListPtr = learnerPtr->taskListPtr;
 
-    bool_t status;
-
     adtree_t* adtreePtr = learnerPtr->adtreePtr;
     float* localBaseLogLikelihoods = learnerPtr->localBaseLogLikelihoods;
     learner_task_t* tasks = learnerPtr->tasks;
+
+    long numVar = adtreePtr->numVar;
+    long numRecord = adtreePtr->numRecord;
+    float baseLogLikelihood = 0.0;
+    float penalty = (float)(-0.5 * log((double)numRecord)); /* only add 1 edge */
+
+    //TM_PARTITION(0, numVar, &v_start, &v_stop);
+
+    bool_t status;
+
+
 
     query_t queries[2];
     vector_t* queryVectorPtr = PVECTOR_ALLOC(2);
@@ -346,17 +360,18 @@ createTaskList (void* argPtr)
     vector_t* parentQueryVectorPtr = PVECTOR_ALLOC(1);
     assert(parentQueryVectorPtr);
 
-    long numVar = adtreePtr->numVar;
-    long numRecord = adtreePtr->numRecord;
-    float baseLogLikelihood = 0.0;
-    float penalty = (float)(-0.5 * log((double)numRecord)); /* only add 1 edge */
 
+    createPartition(0, numVar, myId, numThread, &v_start, &v_stop);
+    //printf("Start: %lu, End: %lu\n", v_start, v_stop);
+    /*
     long v;
 
     long v_start;
     long v_stop;
     createPartition(0, numVar, myId, numThread, &v_start, &v_stop);
-
+    TM_PARTITION(0, numVar, &v_start, &v_stop);
+    printf("start: %lu, stop: %lu\n", v_start, v_stop);
+    */
     /*
      * Compute base log likelihood for each variable and total base loglikelihood
      */
@@ -478,10 +493,15 @@ createTaskList (void* argPtr)
             taskPtr->fromId = bestLocalIndex;
             taskPtr->toId = v;
             taskPtr->score = score;
+            /* Bayes Push Task */
+            /*
             TM_BEGIN();
             status = TMLIST_INSERT(taskListPtr, (void*)taskPtr);
             TM_END();
-            assert(status);
+            */
+            TM_TaskPush((void*)taskPtr, 0);
+
+            //assert(status);
         }
 
     } /* for each variable */
@@ -1138,10 +1158,19 @@ static void
 learnStructure (void* argPtr)
 {
     TM_THREAD_ENTER();
+    //void* fptr = learnStructure;
+    //printf("fptr = %p\n", fptr);
+    TM_Coroutine(learnStructure, argPtr);
+     
+    //void* tx = TM_PROBE();
+    //printf("argPtr[%p][%p]\n", tx, argPtr);
 
     learner_t* learnerPtr = (learner_t*)argPtr;
+    
+     
     net_t* netPtr = learnerPtr->netPtr;
     adtree_t* adtreePtr = learnerPtr->adtreePtr;
+    
     long numRecord = adtreePtr->numRecord;
     float* localBaseLogLikelihoods = learnerPtr->localBaseLogLikelihoods;
     list_t* taskListPtr = learnerPtr->taskListPtr;
@@ -1186,25 +1215,32 @@ learnStructure (void* argPtr)
     while (1) {
 
         learner_task_t* taskPtr;
-        TM_BEGIN();
+        // Bayes Task Pop.
+        /*
+        
         taskPtr = TMpopTask(TM_ARG  taskListPtr);
         TM_END();
+        */
+        taskPtr = TM_TaskPop(0);
         if (taskPtr == NULL) {
             break;
         }
+
+        //printf("taskPtr: %p\n", taskPtr);
 
         operation_t op = taskPtr->op;
         long fromId = taskPtr->fromId;
         long toId = taskPtr->toId;
 
         bool_t isTaskValid;
-
+        //printf("op: %d\n", op);
         TM_BEGIN();
 
         /*
          * Check if task is still valid
          */
         isTaskValid = TRUE;
+        //printf("Entering Switch[%p][%lu]\n", tx, pthread_self());
         switch (op) {
             case OPERATION_INSERT: {
                 if (TMNET_HASEDGE(netPtr, fromId, toId) ||
@@ -1246,7 +1282,12 @@ learnStructure (void* argPtr)
                (isTaskValid ? "yes" : "no"));
         fflush(stdout);
 #endif
-
+        /*
+        printf("[task][%p][%lu] op=%i from=%li to=%li score=%lf valid=%s\n",
+               tx, pthread_self(), taskPtr->op, taskPtr->fromId, taskPtr->toId, taskPtr->score,
+               (isTaskValid ? "yes" : "no"));
+        */
+        //fflush(stdout);
         /*
          * Perform task: update graph and probabilities
          */
@@ -1254,6 +1295,9 @@ learnStructure (void* argPtr)
         if (isTaskValid) {
             TMNET_APPLYOPERATION(netPtr, op, fromId, toId);
         }
+        //printf("Finished Applyoperation[%p]\n", tx);
+
+        //printf("Before commit: %p\n", TM_PROBE());
 
         TM_END();
 
@@ -1444,13 +1488,16 @@ learnStructure (void* argPtr)
             bestTask = newTask;
         }
 #endif /* LEARNER_TRY_REVERSE */
-
+        // Bayes Task Push
         if (bestTask.toId != -1) {
             learner_task_t* tasks = learnerPtr->tasks;
             tasks[toId] = bestTask;
+            /*
             TM_BEGIN();
             TMLIST_INSERT(taskListPtr, (void*)&tasks[toId]);
             TM_END();
+            */
+           TM_TaskPush((void*)&tasks[toId], 0);
 #ifdef TEST_LEARNER
             printf("[new]  op=%i from=%li to=%li score=%lf\n",
                    bestTask.op, bestTask.fromId, bestTask.toId, bestTask.score);

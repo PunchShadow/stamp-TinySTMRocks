@@ -246,6 +246,10 @@ TMinsertEdge (TM_ARGDECL  net_t* netPtr, long fromId, long toId)
 
     net_node_t* childNodePtr = (net_node_t*)vector_at(nodeVectorPtr, toId);
     list_t* parentIdListPtr = childNodePtr->parentIdListPtr;
+    /*
+    printf("TMinsertEdge[%lu]: nodeVectorPtr: %p, childNodePtr: %p, parentIdListPtr: %p\n",
+        pthread_self(), nodeVectorPtr, childNodePtr, parentIdListPtr);
+    */
     status = TMLIST_INSERT(parentIdListPtr, (void*)fromId);
     assert(status);
 
@@ -349,6 +353,10 @@ void
 TMnet_applyOperation (TM_ARGDECL
                       net_t* netPtr, operation_t op, long fromId, long toId)
 {
+    /*
+    printf("[%lu] netPtr: %p, op: %d, fromId: %lu, toId: %lu\n", 
+            pthread_self(), netPtr, op, fromId, toId);
+    */
     switch (op) {
         case OPERATION_INSERT:  TMinsertEdge(TM_ARG   netPtr, fromId, toId); break;
         case OPERATION_REMOVE:  TMremoveEdge(TM_ARG   netPtr, fromId, toId); break;
