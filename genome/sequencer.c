@@ -110,6 +110,8 @@ struct constructEntry {
     long length;
 };
 
+#define RDS 0
+
 
 /* =============================================================================
  * hashString
@@ -227,6 +229,166 @@ sequencer_alloc (long geneLength, long segmentLength, segments_t* segmentsPtr)
     return sequencerPtr;
 }
 
+/* ==============================================================================
+ * sequencer_run task functions
+ * ==============================================================================
+ */
+void
+RemovDuplicateSegments(void* argPtr)
+{
+    TM_TASK_ENTER();
+    TM_Coroutine(RemovDuplicateSegments, argPtr);
+
+    sequencer_t* sequencerPtr = (sequencer_t*)argPtr;
+    segments_t* segmentsPtr = sequencerPtr->segmentsPtr;
+    vector_t* segmentsContentsPtr = segmentsPtr->contentsPtr;
+    hashtable_t* uniqueSegmentsPtr = sequencerPtr->uniqueSegmentsPtr;
+    while(1) {
+        
+        void* task = TM_TaskPop(0);
+        ws_task* taskPtr = (ws_task*)task;
+        if (taskPtr == NULL) {
+            // printf("---> RemovDup: taskPtr is NULL\n");
+            break;
+        }
+        // Extract from task object
+        // printf("++ RemovDuplicateSegments[taskPtr:%p]\n", taskPtr);
+        long ii = taskPtr->start;
+        long ii_stop = MIN(taskPtr->end, (ii+CHUNK_STEP1));
+        // printf("++> RemovDuplicat[ii:%ld][ii_stop:%ld]\n", ii, ii_stop);
+        TM_BEGIN();
+        {
+            for (; ii < ii_stop; ii++) {
+                void* segment = vector_at(segmentsContentsPtr, ii);
+                TMHASHTABLE_INSERT(uniqueSegmentsPtr,
+                                   segment,
+                                   segment);
+            } /* ii */
+        }
+        TM_END();
+    }
+    TM_TASK_EXIT();
+}
+
+void
+UniqueSegmentsComputeHashes(void* argPtr)
+{
+    TM_TASK_ENTER();
+    TM_Coroutine(UniqueSegmentsComputeHashes, argPtr);
+    
+    // Parse the argPtr
+    sequencer_t* sequencerPtr = (sequencer_t*)argPtr;
+    hashtable_t* uniqueSegmentsPtr = sequencerPtr->uniqueSegmentsPtr;
+    constructEntry_t* constructEntries = sequencerPtr->constructEntries;
+    table_t** startHashToConstructEntryTables = sequencerPtr->startHashToConstructEntryTables;
+    table_t* hashToConstructEntryTable = sequencerPtr->hashToConstructEntryTable;
+    segments_t* segmentsPtr = sequencerPtr->segmentsPtr;
+    long segmentLength = segmentsPtr->length;
+    long numUniqueSegment = hashtable_getSize(uniqueSegmentsPtr);
+
+    
+
+    while(1) {
+        void* task = TM_TaskPop(1);
+        ws_task* taskPtr = (ws_task*)task;
+        if (taskPtr == NULL) {
+            // printf("----> uniqueSeg: taskPtr is NULL\n");
+            break;
+        }
+        
+        long i = taskPtr->start;
+        list_t* chainPtr = uniqueSegmentsPtr->buckets[i];
+        list_iter_t it;
+        list_iter_reset(&it, chainPtr);
+        
+        /* Coroutines on same thread share the same entryIndex space. 
+           Extract from taskPtr just in case other threads steal the task.
+        */
+        long entryIndex = *(long*)(taskPtr->data);
+        // printf("----> entryIndex:%ld\n", entryIndex);
+        while (list_iter_hasNext(&it, chainPtr)) {
+
+            char* segment =
+                (char*)((pair_t*)list_iter_next(&it, chainPtr))->firstPtr;
+            constructEntry_t* constructEntryPtr;
+            long j;
+            ulong_t startHash;
+            bool_t status;
+
+            /* Find an empty constructEntries entry */
+            TM_BEGIN();
+            while (((void*)TM_SHARED_READ_P(constructEntries[entryIndex].segment)) != NULL) {
+                entryIndex = (entryIndex + 1) % numUniqueSegment; /* look for empty */
+            }
+            constructEntryPtr = &constructEntries[entryIndex];
+            TM_SHARED_WRITE_P(constructEntryPtr->segment, segment);
+            TM_END();
+            entryIndex = (entryIndex + 1) % numUniqueSegment;
+
+            /*
+             * Save hashes (sdbm algorithm) of segment substrings
+             *
+             * endHashes will be computed for shorter substrings after matches
+             * have been made (in the next phase of the code). This will reduce
+             * the number of substrings for which hashes need to be computed.
+             *
+             * Since we can compute startHashes incrementally, we go ahead
+             * and compute all of them here.
+             */
+            /* constructEntryPtr is local now */
+            constructEntryPtr->endHash = (ulong_t)hashString(&segment[1]);
+
+            startHash = 0;
+            for (j = 1; j < segmentLength; j++) {
+                startHash = (ulong_t)segment[j-1] +
+                            (startHash << 6) + (startHash << 16) - startHash;
+                TM_BEGIN();
+                status = TMTABLE_INSERT(startHashToConstructEntryTables[j],
+                                        (ulong_t)startHash,
+                                        (void*)constructEntryPtr );
+                TM_END();
+                assert(status);
+            }
+
+            /*
+             * For looking up construct entries quickly
+             */
+            startHash = (ulong_t)segment[j-1] +
+                        (startHash << 6) + (startHash << 16) - startHash;
+            TM_BEGIN();
+            status = TMTABLE_INSERT(hashToConstructEntryTable,
+                                    (ulong_t)startHash,
+                                    (void*)constructEntryPtr);
+            TM_END();
+            assert(status);
+        }
+    }
+    // printf("++> Finishing UniqueSeg\n");
+    TM_TASK_EXIT();
+}
+
+/*
+void
+MatchEndsToStarts(void* argPtr)
+{
+    TM_TASK_ENTER();
+    TM_Coroutine(MatchEndsToStarts, argPtr);
+
+    // Parse argPtr
+    sequencer_t* sequencerPtr = (sequencer_t*)argPtr;
+
+
+
+
+
+
+
+    TM_TASK_EXIT();
+}
+*/
+
+
+
 
 /* =============================================================================
  * sequencer_run
@@ -286,20 +448,29 @@ sequencer_run (void* argPtr)
     i_start = 0;
     i_stop = numSegment;
 #endif /* !(HTM || STM) */
-    for (i = i_start; i < i_stop; i+=CHUNK_STEP1) {
-        TM_BEGIN();
-        {
-            long ii;
-            long ii_stop = MIN(i_stop, (i+CHUNK_STEP1));
-            for (ii = i; ii < ii_stop; ii++) {
-                void* segment = vector_at(segmentsContentsPtr, ii);
-                TMHASHTABLE_INSERT(uniqueSegmentsPtr,
-                                   segment,
-                                   segment);
-            } /* ii */
-        }
-        TM_END();
-    }
+    // Normal version - 1
+
+    // for (i = i_start; i < i_stop; i+=CHUNK_STEP1) {
+    //     TM_BEGIN();
+    //     {
+    //         long ii;
+    //         long ii_stop = MIN(i_stop, (i+CHUNK_STEP1));
+    //         for (ii = i; ii < ii_stop; ii++) {
+    //             void* segment = vector_at(segmentsContentsPtr, ii);
+    //             TMHASHTABLE_INSERT(uniqueSegmentsPtr,
+    //                                segment,
+    //                                segment);
+    //         } /* ii */
+    //     }
+    //     TM_END();
+    // }
+    
+    
+    // ShadowTask version - 1
+    // printf("outer: i_stop:%ld\n", i_stop);
+    TM_LOOP2TASK(i_start, i_stop, CHUNK_STEP1, 0, NULL);
+    // printf("++> Finish TM_LOOP2TASK(i_start, i_stop, CHUNK_STEP1, 0, NULL\n");
+    RemovDuplicateSegments(argPtr);
 
     thread_barrier_wait();
 
@@ -349,71 +520,77 @@ sequencer_run (void* argPtr)
     i_stop = uniqueSegmentsPtr->numBucket;
     entryIndex = 0;
 #endif /* !(HTM || STM) */
+    // Normal version - 2
 
-    for (i = i_start; i < i_stop; i++) {
+    // for (i = i_start; i < i_stop; i++) {
 
-        list_t* chainPtr = uniqueSegmentsPtr->buckets[i];
-        list_iter_t it;
-        list_iter_reset(&it, chainPtr);
+    //     list_t* chainPtr = uniqueSegmentsPtr->buckets[i];
+    //     list_iter_t it;
+    //     list_iter_reset(&it, chainPtr);
 
-        while (list_iter_hasNext(&it, chainPtr)) {
+    //     while (list_iter_hasNext(&it, chainPtr)) {
 
-            char* segment =
-                (char*)((pair_t*)list_iter_next(&it, chainPtr))->firstPtr;
-            constructEntry_t* constructEntryPtr;
-            long j;
-            ulong_t startHash;
-            bool_t status;
+    //         char* segment =
+    //             (char*)((pair_t*)list_iter_next(&it, chainPtr))->firstPtr;
+    //         constructEntry_t* constructEntryPtr;
+    //         long j;
+    //         ulong_t startHash;
+    //         bool_t status;
 
-            /* Find an empty constructEntries entry */
-            TM_BEGIN();
-            while (((void*)TM_SHARED_READ_P(constructEntries[entryIndex].segment)) != NULL) {
-                entryIndex = (entryIndex + 1) % numUniqueSegment; /* look for empty */
-            }
-            constructEntryPtr = &constructEntries[entryIndex];
-            TM_SHARED_WRITE_P(constructEntryPtr->segment, segment);
-            TM_END();
-            entryIndex = (entryIndex + 1) % numUniqueSegment;
+    //         /* Find an empty constructEntries entry */
+    //         TM_BEGIN();
+    //         while (((void*)TM_SHARED_READ_P(constructEntries[entryIndex].segment)) != NULL) {
+    //             entryIndex = (entryIndex + 1) % numUniqueSegment; /* look for empty */
+    //         }
+    //         constructEntryPtr = &constructEntries[entryIndex];
+    //         TM_SHARED_WRITE_P(constructEntryPtr->segment, segment);
+    //         TM_END();
+    //         entryIndex = (entryIndex + 1) % numUniqueSegment;
 
-            /*
-             * Save hashes (sdbm algorithm) of segment substrings
-             *
-             * endHashes will be computed for shorter substrings after matches
-             * have been made (in the next phase of the code). This will reduce
-             * the number of substrings for which hashes need to be computed.
-             *
-             * Since we can compute startHashes incrementally, we go ahead
-             * and compute all of them here.
-             */
-            /* constructEntryPtr is local now */
-            constructEntryPtr->endHash = (ulong_t)hashString(&segment[1]);
+    //         /*
+    //          * Save hashes (sdbm algorithm) of segment substrings
+    //          *
+    //          * endHashes will be computed for shorter substrings after matches
+    //          * have been made (in the next phase of the code). This will reduce
+    //          * the number of substrings for which hashes need to be computed.
+    //          *
+    //          * Since we can compute startHashes incrementally, we go ahead
+    //          * and compute all of them here.
+    //          */
+    //         /* constructEntryPtr is local now */
+    //         constructEntryPtr->endHash = (ulong_t)hashString(&segment[1]);
 
-            startHash = 0;
-            for (j = 1; j < segmentLength; j++) {
-                startHash = (ulong_t)segment[j-1] +
-                            (startHash << 6) + (startHash << 16) - startHash;
-                TM_BEGIN();
-                status = TMTABLE_INSERT(startHashToConstructEntryTables[j],
-                                        (ulong_t)startHash,
-                                        (void*)constructEntryPtr );
-                TM_END();
-                assert(status);
-            }
+    //         startHash = 0;
+    //         for (j = 1; j < segmentLength; j++) {
+    //             startHash = (ulong_t)segment[j-1] +
+    //                         (startHash << 6) + (startHash << 16) - startHash;
+    //             TM_BEGIN();
+    //             status = TMTABLE_INSERT(startHashToConstructEntryTables[j],
+    //                                     (ulong_t)startHash,
+    //                                     (void*)constructEntryPtr );
+    //             TM_END();
+    //             assert(status);
+    //         }
 
-            /*
-             * For looking up construct entries quickly
-             */
-            startHash = (ulong_t)segment[j-1] +
-                        (startHash << 6) + (startHash << 16) - startHash;
-            TM_BEGIN();
-            status = TMTABLE_INSERT(hashToConstructEntryTable,
-                                    (ulong_t)startHash,
-                                    (void*)constructEntryPtr);
-            TM_END();
-            assert(status);
-        }
-    }
+    //         /*
+    //          * For looking up construct entries quickly
+    //          */
+    //         startHash = (ulong_t)segment[j-1] +
+    //                     (startHash << 6) + (startHash << 16) - startHash;
+    //         TM_BEGIN();
+    //         status = TMTABLE_INSERT(hashToConstructEntryTable,
+    //                                 (ulong_t)startHash,
+    //                                 (void*)constructEntryPtr);
+    //         TM_END();
+    //         assert(status);
+    //     }
+    // }
 
+    // ShadowTask version - 2 
+    long* entryIndexPtr = &entryIndex;
+    // printf("++ UniqueSeg: TM_LOOP2TASK[entryIndexPtr:%lu]\n", *entryIndexPtr);
+    TM_LOOP2TASK(i_start, i_stop, 1, 1, (void*)entryIndexPtr);
+    UniqueSegmentsComputeHashes(argPtr);
     thread_barrier_wait();
 
     /*
@@ -453,7 +630,7 @@ sequencer_run (void* argPtr)
             if (!endInfoEntries[entryIndex].isEnd) {
                 continue;
             }
-
+            // Normal version - 2
             /*  ConstructEntries[entryIndex] is local data */
             constructEntry_t* endConstructEntryPtr =
                 &constructEntries[entryIndex];
@@ -520,6 +697,9 @@ sequencer_run (void* argPtr)
 
         } /* for (endIndex < numUniqueSegment) */
 
+        // ShadowTask version - 3
+        //TM_LOOP2TASK(index_start, index_stop, 1, 2, entryIndexPtr);
+        //MatchEndsToStarts(argPtr);
         thread_barrier_wait();
 
         /*
