@@ -175,8 +175,11 @@ splitIntoPackets (char* str,
         packetPtr->numFragment = numPacket;
         packetPtr->length      = numDataByte;
         memcpy(packetPtr->data, (str + p * numDataByte), numDataByte);
+        // Intruder task push 
         status = queue_push(packetQueuePtr, (void*)packetPtr);
         assert(status);
+        // // ShadowTask version
+        // TM_TaskSplit((void*)packetPtr, 0);
     }
 
     bool_t status;
@@ -191,8 +194,11 @@ splitIntoPackets (char* str,
     packetPtr->numFragment = numPacket;
     packetPtr->length      = lastNumDataByte;
     memcpy(packetPtr->data, (str + p * numDataByte), lastNumDataByte);
+    //Intruder task push
     status = queue_push(packetQueuePtr, (void*)packetPtr);
     assert(status);
+    // ShadowTask version
+    // TM_TaskSplit((void*)packetPtr, 0);
 }
 
 
@@ -267,6 +273,15 @@ stream_generate (stream_t* streamPtr,
 
     queue_shuffle(packetQueuePtr, randomPtr);
 
+    // ShadowTask
+    // Split packet in packetQueuePtr to task queue
+    while(1) {
+        void* packetPtr = queue_pop(packetQueuePtr);
+        if (packetPtr == NULL) {
+            break;
+        }
+        TM_TaskSplit(packetPtr, 0);
+    }
     detector_free(detectorPtr);
 
     return numAttack;

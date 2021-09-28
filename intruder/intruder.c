@@ -195,16 +195,26 @@ processPackets (void* argPtr)
 
     while (1) {
 
-        char* bytes;
-        TM_BEGIN();
-        bytes = TMSTREAM_GETPACKET(streamPtr);
-        TM_END();
+        // char* bytes;
+        // TM_BEGIN();
+        // // Intruder Task Pop
+        // bytes = TMSTREAM_GETPACKET(streamPtr);
+        // TM_END();
+
+        // // ShadowTask
+        ws_task* taskPtr = TM_TaskPop(0);
+        if (taskPtr == NULL) break;
+        char* bytes = (char*)taskPtr->data;
+
         if (!bytes) {
             break;
         }
 
+
         packet_t* packetPtr = (packet_t*)bytes;
         long flowId = packetPtr->flowId;
+
+        //printf("packetPtr->numFragment:%lu, flowId:%lu\n", packetPtr->numFragment, flowId);
 
         error_t error;
         TM_BEGIN();
@@ -212,6 +222,7 @@ processPackets (void* argPtr)
                                   bytes,
                                   (PACKET_HEADER_LENGTH + packetPtr->length));
         TM_END();
+        // printf("error:%d\n", error);
         if (error) {
             /*
              * Currently, stream_generate() does not create these errors.

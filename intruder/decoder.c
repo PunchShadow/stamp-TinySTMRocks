@@ -200,6 +200,7 @@ decoder_process (decoder_t* decoderPtr, char* bytes, long numByte)
                 (packet_t*)list_iter_next(&it, fragmentListPtr);
             long expectedNumFragment = firstFragmentPtr->numFragment;
 
+
             if (numFragment != expectedNumFragment) {
                 status = MAP_REMOVE(fragmentedMapPtr, (void*)flowId);
                 assert(status);
@@ -343,11 +344,13 @@ TMdecoder_process (TM_ARGDECL  decoder_t* decoderPtr, char* bytes, long numByte)
         MAP_T* fragmentedMapPtr = decoderPtr->fragmentedMapPtr;
         list_t* fragmentListPtr =
             (list_t*)TMMAP_FIND(fragmentedMapPtr, (void*)flowId);
-
+        
+        printf("FragmentListPtr:%p\n", fragmentListPtr);
+        
         if (fragmentListPtr == NULL) {
-
             fragmentListPtr = TMLIST_ALLOC(&packet_compareFragmentId);
             assert(fragmentListPtr);
+            // Instruder Task Push
             status = TMLIST_INSERT(fragmentListPtr, (void*)packetPtr);
             assert(status);
             status = TMMAP_INSERT(fragmentedMapPtr,
@@ -364,6 +367,8 @@ TMdecoder_process (TM_ARGDECL  decoder_t* decoderPtr, char* bytes, long numByte)
                 (packet_t*)TMLIST_ITER_NEXT(&it, fragmentListPtr);
             long expectedNumFragment = firstFragmentPtr->numFragment;
 
+            printf("++ numFragment:%lu, expectedNumFragment:%lu\n", numFragment, expectedNumFragment);
+            
             if (numFragment != expectedNumFragment) {
                 status = TMMAP_REMOVE(fragmentedMapPtr, (void*)flowId);
                 assert(status);
