@@ -180,7 +180,7 @@ void
 processPackets (void* argPtr)
 {
     TM_THREAD_ENTER();
-
+    TM_Coroutine(processPackets, argPtr);
     long threadId = thread_getId();
 
     stream_t*   streamPtr    = ((arg_t*)argPtr)->streamPtr;
