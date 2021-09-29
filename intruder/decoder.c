@@ -345,7 +345,7 @@ TMdecoder_process (TM_ARGDECL  decoder_t* decoderPtr, char* bytes, long numByte)
         list_t* fragmentListPtr =
             (list_t*)TMMAP_FIND(fragmentedMapPtr, (void*)flowId);
         
-        printf("FragmentListPtr:%p\n", fragmentListPtr);
+        // printf("FragmentListPtr:%p\n", fragmentListPtr);
         
         if (fragmentListPtr == NULL) {
             fragmentListPtr = TMLIST_ALLOC(&packet_compareFragmentId);
@@ -367,7 +367,7 @@ TMdecoder_process (TM_ARGDECL  decoder_t* decoderPtr, char* bytes, long numByte)
                 (packet_t*)TMLIST_ITER_NEXT(&it, fragmentListPtr);
             long expectedNumFragment = firstFragmentPtr->numFragment;
 
-            printf("++ numFragment:%lu, expectedNumFragment:%lu\n", numFragment, expectedNumFragment);
+            // printf("++ numFragment:%lu, expectedNumFragment:%lu\n", numFragment, expectedNumFragment);
             
             if (numFragment != expectedNumFragment) {
                 status = TMMAP_REMOVE(fragmentedMapPtr, (void*)flowId);
