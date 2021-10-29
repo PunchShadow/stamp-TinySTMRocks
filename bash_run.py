@@ -6,6 +6,7 @@ import re
 import subprocess
 import tempfile
 import math
+from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser()
@@ -17,6 +18,10 @@ parser.add_argument("-m", "--max_thread", type=int,
                     help="Maxium numbers of thread usage. Must be even number.")
 parser.add_argument("-perf", action='store_true',
                     help="Use perf probe on each benchmarks")
+parser.add_argument("-sim", action='store_true',
+                    help="Choose to run simulation or not, default is not.")
+parser.add_argument("-debug", action='store_true',
+                    help="To print debug information or not.")
 
 args = parser.parse_args()
 
@@ -50,11 +55,24 @@ cmds = {
     "intruder": "./intruder.stm -a10 -l128 -n262144 -s1 -t",
     "kmeans_high": "./kmeans.stm -m15 -n15 -t0.00001 -i inputs/random-n65536-d32-c16.txt -p",
     "kmeans_low": "./kmeans.stm -m40 -n40 -t0.00001 -i inputs/random-n65536-d32-c16.txt -p",
-    "labyrinth": "./labyrinth.stm -i inputs/random-x512-y512-z7-n512.txt",
+    "labyrinth": "./labyrinth.stm -i inputs/random-x512-y512-z7-n512.txt -t",
     "ssca2": "./ssca2.stm -s20 -i1.0 -u1.0 -l3 -p3 -t",
-    "vacation_high": "./vacation.stm -n4 -q60 -u90 -r1048576 -t4194304",
-    "vacation_low": "./vacation.stm -n2 -q90 -u98 -r1048576 -t4194304",
+    "vacation_high": "./vacation.stm -n4 -q60 -u90 -r1048576 -t4194304 -c",
+    "vacation_low": "./vacation.stm -n2 -q90 -u98 -r1048576 -t4194304 -c",
     "yada": "./yada.stm -a15 -i inputs/ttimeu1000000.2 -t"
+}
+
+cmds_sim = {
+    "bayes": "./bayes.stm -v32 -r1024 -n2 -p20 -s0 -i2 -e2 -t",
+    "genome": "./genome.stm -g256 -s16 -n16384 -t",
+    "intruder": "./intruder.stm -a10 -l4 -n2038 -s1 -t",
+    "kmeans_high": "./kmeans.stm -m15 -n15 -t0.05 -i inputs/random-n2048-d16-c16.txt -p",
+    "kmeans_low": "./kmeans.stm -m40 m40 -n40 -t0.05 -i inputs/random-n2048-d16-c16.txt -p",
+    "labyrinth": "./labyrinth.stm -i inputs/random-x32-y32-z3-n96.txt -t",
+    "ssca2": "./ssca2.stm -s13 -i1.0 -u1.0 -l3 -p3 -t",
+    "vacation_high": "./vacation.stm -n4 -q60 -u90 -r16384 -t4096 -c",
+    "vacation_low": "./vacation.stm -n2 -q90 -u98 -r16384 -t4096 -c",
+    "yada": "./yada.stm -a20 -i inputs/633.2 -t"
 }
 
 #perf_cmd_prefix = 'sudo perf '
@@ -84,6 +102,11 @@ if args.perf:
     # TODO: Executing with perf state
     
 
+
+# If we choose to run in simulator
+if args.sim:
+    cmds = cmds_sim
+
 """
 for i in range(times):
     for bench in cmds:
@@ -112,10 +135,11 @@ def execute_and_count(cmd, index):
                     exe_time = re.findall(r"[-+]?\d*\.\d+|\d+", str(line))
                 #print(line)
         exe_sum = sum([float(x) for x in exe_time])
-        print("cmd: ", cmd)
-        print("match line: ", match_lines )
-        print("exe_time: ", exe_time)
-        print("exe_sum: ", exe_sum)
+        if args.debug:
+            print("cmd: ", cmd)
+            print("match line: ", match_lines )
+            print("exe_time: ", exe_time)
+            print("exe_sum: ", exe_sum)
 
         
     """
@@ -146,30 +170,31 @@ exe_time_dic['vacation_low'] = []
 
 high_flag = 0
 thread_batch_times = (2**i for i in range(0, int(math.log(max_thread_num, 2))+1))
-for thread_num in thread_batch_times:
-    for i in range(times):
-        for bench in dic:
-            os.chdir(bench)
-            index = bench
-            if bench == 'kmeans' or bench == 'vacation':
-                high_cmd = cmds[index + '_high']
-                low_cmd = cmds[index + '_low']
-                if bench == 'kmeans':
+
+# Progress bar
+tqdm_times = times*len(cmds_index)*math.log(max_thread_num, 2)
+with tqdm(total=tqdm_times) as pbar:
+    for thread_num in thread_batch_times:
+        for i in range(times):
+            for bench in dic:
+                os.chdir(bench)
+                index = bench
+                if bench == 'kmeans' or bench == 'vacation':
+                    high_cmd = cmds[index + '_high']
+                    low_cmd = cmds[index + '_low']
                     high_cmd += str(thread_num)
                     low_cmd += str(thread_num)
-                execute_and_count(high_cmd, index + '_high')
-                execute_and_count(low_cmd, index + '_low')
-                os.chdir(ROOT)
-                continue
+                    execute_and_count(high_cmd, index + '_high')
+                    execute_and_count(low_cmd, index + '_low')
+                    os.chdir(ROOT)
+                    continue
 
-            cmd = cmds[index]
-            if bench == 'vacation' or bench == 'labyrinth':
-                cmd = cmd
-            else:
+                cmd = cmds[index]
                 cmd += str(thread_num)
-            
-            execute_and_count(cmd, index)    
-            os.chdir(ROOT)
+                
+                execute_and_count(cmd, index)
+                pbar.update(1) # update progress bar    
+                os.chdir(ROOT)
 
 # Record to file and caculate averages
 avg_list = []
