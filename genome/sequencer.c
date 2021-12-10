@@ -237,7 +237,7 @@ void
 RemovDuplicateSegments(void* argPtr)
 {
     TM_TASK_ENTER();
-    TM_Coroutine(RemovDuplicateSegments, argPtr);
+    // TM_Coroutine(RemovDuplicateSegments, argPtr);
 
     sequencer_t* sequencerPtr = (sequencer_t*)argPtr;
     segments_t* segmentsPtr = sequencerPtr->segmentsPtr;
@@ -246,7 +246,7 @@ RemovDuplicateSegments(void* argPtr)
     while(1) {
         
         void* task = TM_TaskPop(0);
-        ws_task* taskPtr = (ws_task*)task;
+        hs_task_t* taskPtr = (hs_task_t*)task;
         if (taskPtr == NULL) {
             // printf("---> RemovDup: taskPtr is NULL\n");
             break;
@@ -267,14 +267,14 @@ RemovDuplicateSegments(void* argPtr)
         }
         TM_END();
     }
-    TM_TASK_EXIT();
+    // TM_TASK_EXIT();
 }
 
 void
-UniqueSegmentsComputeHashes(void* argPtr)
+UniqueSegmentsComputeHashes(void* argPtr, long* entryIndex)
 {
     TM_TASK_ENTER();
-    TM_Coroutine(UniqueSegmentsComputeHashes, argPtr);
+    // TM_Coroutine(UniqueSegmentsComputeHashes, argPtr);
     
     // Parse the argPtr
     sequencer_t* sequencerPtr = (sequencer_t*)argPtr;
@@ -290,11 +290,8 @@ UniqueSegmentsComputeHashes(void* argPtr)
 
     while(1) {
         void* task = TM_TaskPop(1);
-        ws_task* taskPtr = (ws_task*)task;
-        if (taskPtr == NULL) {
-            // printf("----> uniqueSeg: taskPtr is NULL\n");
-            break;
-        }
+        if (task == NULL) break;
+        hs_task_t* taskPtr = (hs_task_t*)task;
         
         long i = taskPtr->start;
         list_t* chainPtr = uniqueSegmentsPtr->buckets[i];
@@ -304,12 +301,13 @@ UniqueSegmentsComputeHashes(void* argPtr)
         /* Coroutines on same thread share the same entryIndex space. 
            Extract from taskPtr just in case other threads steal the task.
         */
-        long entryIndex = *(long*)(taskPtr->data);
+        // long entryIndex = *(long*)(taskPtr->data);
         // printf("----> entryIndex:%ld\n", entryIndex);
         while (list_iter_hasNext(&it, chainPtr)) {
 
             char* segment =
                 (char*)((pair_t*)list_iter_next(&it, chainPtr))->firstPtr;
+            if (segment == NULL) printf("segment is NULL\n");
             constructEntry_t* constructEntryPtr;
             long j;
             ulong_t startHash;
@@ -317,13 +315,13 @@ UniqueSegmentsComputeHashes(void* argPtr)
 
             /* Find an empty constructEntries entry */
             TM_BEGIN();
-            while (((void*)TM_SHARED_READ_P(constructEntries[entryIndex].segment)) != NULL) {
-                entryIndex = (entryIndex + 1) % numUniqueSegment; /* look for empty */
+            while (((void*)TM_SHARED_READ_P(constructEntries[*entryIndex].segment)) != NULL) {
+                *entryIndex = (*entryIndex + 1) % numUniqueSegment; /* look for empty */
             }
-            constructEntryPtr = &constructEntries[entryIndex];
+            constructEntryPtr = &constructEntries[*entryIndex];
             TM_SHARED_WRITE_P(constructEntryPtr->segment, segment);
             TM_END();
-            entryIndex = (entryIndex + 1) % numUniqueSegment;
+            *entryIndex = (*entryIndex + 1) % numUniqueSegment;
 
             /*
              * Save hashes (sdbm algorithm) of segment substrings
@@ -364,7 +362,7 @@ UniqueSegmentsComputeHashes(void* argPtr)
         }
     }
     // printf("++> Finishing UniqueSeg\n");
-    TM_TASK_EXIT();
+    // TM_TASK_EXIT();
 }
 
 /*
@@ -448,29 +446,27 @@ sequencer_run (void* argPtr)
     i_start = 0;
     i_stop = numSegment;
 #endif /* !(HTM || STM) */
-    // Normal version - 1
 
-    // for (i = i_start; i < i_stop; i+=CHUNK_STEP1) {
-    //     TM_BEGIN();
-    //     {
-    //         long ii;
-    //         long ii_stop = MIN(i_stop, (i+CHUNK_STEP1));
-    //         for (ii = i; ii < ii_stop; ii++) {
-    //             void* segment = vector_at(segmentsContentsPtr, ii);
-    //             TMHASHTABLE_INSERT(uniqueSegmentsPtr,
-    //                                segment,
-    //                                segment);
-    //         } /* ii */
-    //     }
-    //     TM_END();
-    // }
+    // Normal version - 1
+    for (i = i_start; i < i_stop; i+=CHUNK_STEP1) {
+        TM_BEGIN();
+        {
+            long ii;
+            long ii_stop = MIN(i_stop, (i+CHUNK_STEP1));
+            for (ii = i; ii < ii_stop; ii++) {
+                void* segment = vector_at(segmentsContentsPtr, ii);
+                TMHASHTABLE_INSERT(uniqueSegmentsPtr,
+                                   segment,
+                                   segment);
+            } /* ii */
+        }
+        TM_END();
+    }
     
     
     // ShadowTask version - 1
-    // printf("outer: i_stop:%ld\n", i_stop);
-    TM_LOOP2TASK(i_start, i_stop, CHUNK_STEP1, 0, NULL);
-    // printf("++> Finish TM_LOOP2TASK(i_start, i_stop, CHUNK_STEP1, 0, NULL\n");
-    RemovDuplicateSegments(argPtr);
+    // TM_LOOP2TASK(i_start, i_stop, CHUNK_STEP1, 0, NULL);
+    // RemovDuplicateSegments(argPtr);
 
     thread_barrier_wait();
 
@@ -587,10 +583,10 @@ sequencer_run (void* argPtr)
     // }
 
     // ShadowTask version - 2 
-    long* entryIndexPtr = &entryIndex;
-    // printf("++ UniqueSeg: TM_LOOP2TASK[entryIndexPtr:%lu]\n", *entryIndexPtr);
-    TM_LOOP2TASK(i_start, i_stop, 1, 1, (void*)entryIndexPtr);
-    UniqueSegmentsComputeHashes(argPtr);
+    TM_LOOP2TASK(i_start, i_stop, 1, 1, NULL);
+    UniqueSegmentsComputeHashes(argPtr, &entryIndex);
+    
+    
     thread_barrier_wait();
 
     /*
@@ -621,7 +617,7 @@ sequencer_run (void* argPtr)
         index_start = 0;
         index_stop = numUniqueSegment;
 #endif /* !(HTM || STM) */
-
+        // Normal Version - 3
         /* Iterating over disjoint itervals in the range [0, numUniqueSegment) */
         for (entryIndex = index_start;
              entryIndex < index_stop;
@@ -698,6 +694,7 @@ sequencer_run (void* argPtr)
         } /* for (endIndex < numUniqueSegment) */
 
         // ShadowTask version - 3
+        // TODO: Not finish modification
         //TM_LOOP2TASK(index_start, index_stop, 1, 2, entryIndexPtr);
         //MatchEndsToStarts(argPtr);
         thread_barrier_wait();
