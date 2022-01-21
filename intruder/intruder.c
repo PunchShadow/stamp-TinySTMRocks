@@ -179,7 +179,10 @@ parseArgs (long argc, char* const argv[])
 void
 processPackets (void* argPtr)
 {
+    /* normal version */
     TM_THREAD_ENTER();
+    /* Romeo version */
+    // TM_THREAD_ENTER(2);
     // TM_Coroutine(processPackets, argPtr);
     long threadId = thread_getId();
 
@@ -202,13 +205,13 @@ processPackets (void* argPtr)
         // TM_END();
 
         // // ShadowTask
-        ws_task* taskPtr = TM_TaskPop(0);
+        hs_task_t* taskPtr = TM_TaskPop(0);
         if (taskPtr == NULL) break;
-        char* bytes = (char*)taskPtr->data;
+        char* bytes = (char*)(taskPtr->data);
 
-        if (!bytes) {
-            break;
-        }
+        // if (!bytes) {
+        //     break;
+        // }
 
 
         packet_t* packetPtr = (packet_t*)bytes;
@@ -218,6 +221,7 @@ processPackets (void* argPtr)
 
         error_t error;
         TM_BEGIN();
+        // Intruder task push
         error = TMDECODER_PROCESS(decoderPtr,
                                   bytes,
                                   (PACKET_HEADER_LENGTH + packetPtr->length));

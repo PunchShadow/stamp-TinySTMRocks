@@ -79,6 +79,8 @@
 #include "tm.h"
 #include "types.h"
 
+extern int makeNodeNum;
+
 enum param_types {
     PARAM_EDGE    = (unsigned char)'e',
     PARAM_INSERT  = (unsigned char)'i',
@@ -297,8 +299,8 @@ MAIN(argc, argv)
 
     puts("done.");
     fflush(stdout);
-    printf("Adtree time = %f\n",
-           TIMER_DIFF_SECONDS(adtreeStartTime, adtreeStopTime));
+    printf("Adtree time = %f, makeNodeTimes = %d\n",
+           TIMER_DIFF_SECONDS(adtreeStartTime, adtreeStopTime), makeNodeNum);
     fflush(stdout);
 
     /*

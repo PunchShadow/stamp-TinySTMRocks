@@ -32,7 +32,7 @@ in the source directory. For example, for the sequential flavor, run:
 By default, this produces an executable named "labyrinth", which can then be
 run in the following manner:
 
-    ./labyrinth -i <input_file>
+    ./labyrinth -i <input_file> -t <thread_num>
 
 The following input file is recommended for simulated runs:
 

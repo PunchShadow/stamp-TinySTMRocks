@@ -165,6 +165,8 @@ parseArgs (long argc, char* const argv[])
     while ((opt = getopt(argc, argv, "c:n:q:r:t:u:")) != -1) {
         switch (opt) {
             case 'c':
+                global_params[PARAM_CLIENTS] = atol(optarg);
+                break;
             case 'n':
             case 'q':
             case 'r':

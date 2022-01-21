@@ -108,6 +108,9 @@
 #include "thread.h"
 #include "tm.h"
 #include "util.h"
+// #include "global_record.h"
+
+// extern int global_record[32];
 
 #define MAX_LINE_LENGTH 1000000 /* max input is 400000 one digit input + spaces */
 
@@ -372,6 +375,15 @@ MAIN(argc, argv)
 #endif /* OUTPUT TO_STDOUT */
 
     printf("Time: %lg seconds\n", global_time);
+    
+    // /* Print the record stats */
+    // printf("--------<< global_record >>----------------\n");
+    // int g_rsum = 0;
+    // for (int i=0; i<nthreads; i++) {
+    //     g_rsum += global_record[i];
+    //     printf("g_r[%d]: %d\n", i, global_record[i]);
+    // }
+    // printf("g_r_sum: %d\n", g_rsum);
 
     free(cluster_assign);
     free(attributes);
@@ -384,6 +396,8 @@ MAIN(argc, argv)
     GOTO_SIM();
 
     thread_shutdown();
+
+
 
     MAIN_RETURN(0);
 }

@@ -185,6 +185,7 @@ initializeWork (heap_t* workHeapPtr, mesh_t* meshPtr)
             break;
         }
         numBad++;
+        /* Normal version - yada taskpush */
         bool_t status = heap_insert(workHeapPtr, (void*)elementPtr);
         assert(status);
         element_setIsReferenced(elementPtr, TRUE);
@@ -205,7 +206,12 @@ process ()
     int tid = pthread_self();
 
     //printf("Enter thread: %d\n", tid);
+    /* Normal version */
     TM_THREAD_ENTER();
+    /* Romeo version */
+    // TM_THREAD_ENTER(6);
+    /* ShadowTask version - coroutine */
+    // TM_Coroutine(process, global_workHeapPtr);
 
     heap_t* workHeapPtr = global_workHeapPtr;
     mesh_t* meshPtr = global_meshPtr;
@@ -262,16 +268,17 @@ process ()
 
         totalNumAdded += numAdded;
 
+        /* Normal version - Insert back to shared graph */
         TM_BEGIN();
         TMREGION_TRANSFERBAD(regionPtr, workHeapPtr);
         TM_END();
 
         numProcess++;
-        printf("Number of process: %ld\n", numProcess);
+        //printf("Number of process: %ld\n", numProcess);
         
 
     }
-    printf("Finish loop\n");
+    // printf("Finish loop\n");
 
     TM_BEGIN();
     TM_SHARED_WRITE(global_totalNumAdded,
@@ -282,6 +289,8 @@ process ()
 
     PREGION_FREE(regionPtr);
 
+    // ShadowTask
+    //TM_TASK_EXIT();
     TM_THREAD_EXIT();
 }
 

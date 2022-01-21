@@ -9,3 +9,16 @@
 *.poly
 kmeans/result_log/*
 kmeans/inputs/*
+*.svg
+*.folded
+*.perf
+*.log
+*.data
+*.old
+FlameGraph/
+.vscode/
+*.pl
+*.svg
+*.perf
+*.folded
+

@@ -94,26 +94,32 @@ int
 common_findNearestPoint (float*  pt,        /* [nfeatures] */
                          int     nfeatures,
                          float** pts,       /* [npts][nfeatures] */
-                         int     npts)
+                         int     npts,
+                         int*    ecu_num)   /* Cal ecu execute number */
 {
     int index = -1;
     int i;
     float max_dist = FLT_MAX;
     const float limit = 0.99999;
+    int count = 0;
 
     /* Find the cluster center id with min distance to pt */
     for (i = 0; i < npts; i++) {
         float dist;
+        
         dist = common_euclidDist2(pt, pts[i], nfeatures);  /* no need square root */
+        // printf("dist, max:[%f, %f]\n", dist, max_dist);
         if ((dist / max_dist) < limit) {
             max_dist = dist;
             index = i;
             if (max_dist == 0) {
+                count++;
                 break;
             }
         }
     }
 
+    *ecu_num = count; 
     return index;
 }
 

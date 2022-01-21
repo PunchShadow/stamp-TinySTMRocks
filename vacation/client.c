@@ -155,7 +155,12 @@ selectAction (long r, long percentUser)
 void
 client_run (void* argPtr)
 {
+    /* normal version */
     TM_THREAD_ENTER();
+    /* Romeo version */
+    // TM_THREAD_ENTER(2);
+    // ShadowTask version - coroutine
+    // TM_Coroutine(client_run, argPtr);
 
     long myId = thread_getId();
     client_t* clientPtr = ((client_t**)argPtr)[myId];
@@ -174,143 +179,160 @@ client_run (void* argPtr)
     long* prices = (long*)P_MALLOC(numQueryPerTransaction * sizeof(long));
 
     long i;
+    long stop;
+    // ShadowTask version - wrap_size = 20
+    TM_LOOP2TASK(0, numOperation, 20, 0, NULL);
 
-    for (i = 0; i < numOperation; i++) {
 
-        long r = random_generate(randomPtr) % 100;
-        action_t action = selectAction(r, percentUser);
+    /* Normal version - vacation */
+    // for (i = 0; i < numOperation; i++) {
 
-        switch (action) {
+    /* ShadowTask version */
 
-            case ACTION_MAKE_RESERVATION: {
-                long maxPrices[NUM_RESERVATION_TYPE] = { -1, -1, -1 };
-                long maxIds[NUM_RESERVATION_TYPE] = { -1, -1, -1 };
-                long n;
-                long numQuery = random_generate(randomPtr) % numQueryPerTransaction + 1;
-                long customerId = random_generate(randomPtr) % queryRange + 1;
-                for (n = 0; n < numQuery; n++) {
-                    types[n] = random_generate(randomPtr) % NUM_RESERVATION_TYPE;
-                    ids[n] = (random_generate(randomPtr) % queryRange) + 1;
-                }
-                bool_t isFound = FALSE;
-                TM_BEGIN();
-                for (n = 0; n < numQuery; n++) {
-                    long t = types[n];
-                    long id = ids[n];
-                    long price = -1;
-                    switch (t) {
-                        case RESERVATION_CAR:
-                            if (MANAGER_QUERY_CAR(managerPtr, id) >= 0) {
-                                price = MANAGER_QUERY_CAR_PRICE(managerPtr, id);
-                            }
-                            break;
-                        case RESERVATION_FLIGHT:
-                            if (MANAGER_QUERY_FLIGHT(managerPtr, id) >= 0) {
-                                price = MANAGER_QUERY_FLIGHT_PRICE(managerPtr, id);
-                            }
-                            break;
-                        case RESERVATION_ROOM:
-                            if (MANAGER_QUERY_ROOM(managerPtr, id) >= 0) {
-                                price = MANAGER_QUERY_ROOM_PRICE(managerPtr, id);
-                            }
-                            break;
-                        default:
-                            assert(0);
+    while(1) {
+        
+        hs_task_t* taskPtr = (hs_task_t*)TM_TaskPop(0);
+        if (taskPtr == NULL) break;
+        
+        stop = taskPtr->end;
+        
+        for(i = taskPtr->start; i < stop; i++) {
+
+            long r = random_generate(randomPtr) % 100;
+            action_t action = selectAction(r, percentUser);
+
+            switch (action) {
+
+                case ACTION_MAKE_RESERVATION: {
+                    long maxPrices[NUM_RESERVATION_TYPE] = { -1, -1, -1 };
+                    long maxIds[NUM_RESERVATION_TYPE] = { -1, -1, -1 };
+                    long n;
+                    long numQuery = random_generate(randomPtr) % numQueryPerTransaction + 1;
+                    long customerId = random_generate(randomPtr) % queryRange + 1;
+                    for (n = 0; n < numQuery; n++) {
+                        types[n] = random_generate(randomPtr) % NUM_RESERVATION_TYPE;
+                        ids[n] = (random_generate(randomPtr) % queryRange) + 1;
                     }
-                    if (price > maxPrices[t]) {
-                        maxPrices[t] = price;
-                        maxIds[t] = id;
-                        isFound = TRUE;
-                    }
-                } /* for n */
-                if (isFound) {
-                    MANAGER_ADD_CUSTOMER(managerPtr, customerId);
-                }
-                if (maxIds[RESERVATION_CAR] > 0) {
-                    MANAGER_RESERVE_CAR(managerPtr,
-                                        customerId, maxIds[RESERVATION_CAR]);
-                }
-                if (maxIds[RESERVATION_FLIGHT] > 0) {
-                    MANAGER_RESERVE_FLIGHT(managerPtr,
-                                           customerId, maxIds[RESERVATION_FLIGHT]);
-                }
-                if (maxIds[RESERVATION_ROOM] > 0) {
-                    MANAGER_RESERVE_ROOM(managerPtr,
-                                         customerId, maxIds[RESERVATION_ROOM]);
-                }
-                TM_END();
-                break;
-            }
-
-            case ACTION_DELETE_CUSTOMER: {
-                long customerId = random_generate(randomPtr) % queryRange + 1;
-                TM_BEGIN();
-                long bill = MANAGER_QUERY_CUSTOMER_BILL(managerPtr, customerId);
-                if (bill >= 0) {
-                    MANAGER_DELETE_CUSTOMER(managerPtr, customerId);
-                }
-                TM_END();
-                break;
-            }
-
-            case ACTION_UPDATE_TABLES: {
-                long numUpdate = random_generate(randomPtr) % numQueryPerTransaction + 1;
-                long n;
-                for (n = 0; n < numUpdate; n++) {
-                    types[n] = random_generate(randomPtr) % NUM_RESERVATION_TYPE;
-                    ids[n] = (random_generate(randomPtr) % queryRange) + 1;
-                    ops[n] = random_generate(randomPtr) % 2;
-                    if (ops[n]) {
-                        prices[n] = ((random_generate(randomPtr) % 5) * 10) + 50;
-                    }
-                }
-                TM_BEGIN();
-                for (n = 0; n < numUpdate; n++) {
-                    long t = types[n];
-                    long id = ids[n];
-                    long doAdd = ops[n];
-                    if (doAdd) {
-                        long newPrice = prices[n];
+                    bool_t isFound = FALSE;
+                    TM_BEGIN();
+                    for (n = 0; n < numQuery; n++) {
+                        long t = types[n];
+                        long id = ids[n];
+                        long price = -1;
                         switch (t) {
                             case RESERVATION_CAR:
-                                MANAGER_ADD_CAR(managerPtr, id, 100, newPrice);
+                                if (MANAGER_QUERY_CAR(managerPtr, id) >= 0) {
+                                    price = MANAGER_QUERY_CAR_PRICE(managerPtr, id);
+                                }
                                 break;
                             case RESERVATION_FLIGHT:
-                                MANAGER_ADD_FLIGHT(managerPtr, id, 100, newPrice);
+                                if (MANAGER_QUERY_FLIGHT(managerPtr, id) >= 0) {
+                                    price = MANAGER_QUERY_FLIGHT_PRICE(managerPtr, id);
+                                }
                                 break;
                             case RESERVATION_ROOM:
-                                MANAGER_ADD_ROOM(managerPtr, id, 100, newPrice);
+                                if (MANAGER_QUERY_ROOM(managerPtr, id) >= 0) {
+                                    price = MANAGER_QUERY_ROOM_PRICE(managerPtr, id);
+                                }
                                 break;
                             default:
                                 assert(0);
                         }
-                    } else { /* do delete */
-                        switch (t) {
-                            case RESERVATION_CAR:
-                                MANAGER_DELETE_CAR(managerPtr, id, 100);
-                                break;
-                            case RESERVATION_FLIGHT:
-                                MANAGER_DELETE_FLIGHT(managerPtr, id);
-                                break;
-                            case RESERVATION_ROOM:
-                                MANAGER_DELETE_ROOM(managerPtr, id, 100);
-                                break;
-                            default:
-                                assert(0);
+                        if (price > maxPrices[t]) {
+                            maxPrices[t] = price;
+                            maxIds[t] = id;
+                            isFound = TRUE;
+                        }
+                    } /* for n */
+                    if (isFound) {
+                        MANAGER_ADD_CUSTOMER(managerPtr, customerId);
+                    }
+                    if (maxIds[RESERVATION_CAR] > 0) {
+                        MANAGER_RESERVE_CAR(managerPtr,
+                                            customerId, maxIds[RESERVATION_CAR]);
+                    }
+                    if (maxIds[RESERVATION_FLIGHT] > 0) {
+                        MANAGER_RESERVE_FLIGHT(managerPtr,
+                                            customerId, maxIds[RESERVATION_FLIGHT]);
+                    }
+                    if (maxIds[RESERVATION_ROOM] > 0) {
+                        MANAGER_RESERVE_ROOM(managerPtr,
+                                            customerId, maxIds[RESERVATION_ROOM]);
+                    }
+                    TM_END();
+                    break;
+                }
+
+                case ACTION_DELETE_CUSTOMER: {
+                    long customerId = random_generate(randomPtr) % queryRange + 1;
+                    TM_BEGIN();
+                    long bill = MANAGER_QUERY_CUSTOMER_BILL(managerPtr, customerId);
+                    if (bill >= 0) {
+                        MANAGER_DELETE_CUSTOMER(managerPtr, customerId);
+                    }
+                    TM_END();
+                    break;
+                }
+
+                case ACTION_UPDATE_TABLES: {
+                    long numUpdate = random_generate(randomPtr) % numQueryPerTransaction + 1;
+                    long n;
+                    for (n = 0; n < numUpdate; n++) {
+                        types[n] = random_generate(randomPtr) % NUM_RESERVATION_TYPE;
+                        ids[n] = (random_generate(randomPtr) % queryRange) + 1;
+                        ops[n] = random_generate(randomPtr) % 2;
+                        if (ops[n]) {
+                            prices[n] = ((random_generate(randomPtr) % 5) * 10) + 50;
                         }
                     }
+                    TM_BEGIN();
+                    for (n = 0; n < numUpdate; n++) {
+                        long t = types[n];
+                        long id = ids[n];
+                        long doAdd = ops[n];
+                        if (doAdd) {
+                            long newPrice = prices[n];
+                            switch (t) {
+                                case RESERVATION_CAR:
+                                    MANAGER_ADD_CAR(managerPtr, id, 100, newPrice);
+                                    break;
+                                case RESERVATION_FLIGHT:
+                                    MANAGER_ADD_FLIGHT(managerPtr, id, 100, newPrice);
+                                    break;
+                                case RESERVATION_ROOM:
+                                    MANAGER_ADD_ROOM(managerPtr, id, 100, newPrice);
+                                    break;
+                                default:
+                                    assert(0);
+                            }
+                        } else { /* do delete */
+                            switch (t) {
+                                case RESERVATION_CAR:
+                                    MANAGER_DELETE_CAR(managerPtr, id, 100);
+                                    break;
+                                case RESERVATION_FLIGHT:
+                                    MANAGER_DELETE_FLIGHT(managerPtr, id);
+                                    break;
+                                case RESERVATION_ROOM:
+                                    MANAGER_DELETE_ROOM(managerPtr, id, 100);
+                                    break;
+                                default:
+                                    assert(0);
+                            }
+                        }
+                    }
+                    TM_END();
+                    break;
                 }
-                TM_END();
-                break;
-            }
 
-            default:
-                assert(0);
+                default:
+                    assert(0);
 
-        } /* switch (action) */
+            } /* switch (action) */
 
-    } /* for i */
-
+        } /* for i */
+    } /* while(1) */
+    // TM_TASK_EXIT();
     TM_THREAD_EXIT();
 }
 

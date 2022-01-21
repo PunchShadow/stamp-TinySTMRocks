@@ -85,6 +85,8 @@
 #include "utility.h"
 #include "vector.h"
 
+int makeNodeNum = 0;
+
 
 /* =============================================================================
  * allocNode
@@ -279,6 +281,7 @@ makeNode (long parentIndex,
           long numRecord,
           data_t* dataPtr)
 {
+    makeNodeNum++;
     adtree_node_t* nodePtr = allocNode(index);
     assert(nodePtr);
 

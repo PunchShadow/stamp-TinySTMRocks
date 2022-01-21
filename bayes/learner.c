@@ -312,6 +312,40 @@ createPartition (long min, long max, long id, long n,
     *startPtr = start;
     *stopPtr = stop;
 }
+/* =============================================================================
+ * checkStack // ShadowTask
+ * -- Dump all the task in stack and repop them into stack.
+ * =============================================================================
+ */
+// static void
+// checkStack (int ver)
+// {
+//     pthread_t pthread_num = pthread_self();
+//     hs_task_t** taskArray = malloc(sizeof(hs_task_t*) * 1000);
+//     for(int i=0; i < 1000; i++) {
+//         taskArray[i] = malloc(sizeof(hs_task_t));
+//     }
+//     int count = -1;
+//     hs_task_t* taskPtr = (hs_task_t*)TM_TaskPop(ver);
+//     // Pop and print
+//     printf("%lu: ", pthread_num);
+//     while(taskPtr != NULL) {
+//         count++;
+        
+//         taskArray[count] = taskPtr;
+//         printf("%d ", ((learner_task_t*)(taskArray[count]->data))->op);
+//         taskPtr = (hs_task_t*)TM_TaskPop(ver);
+//     }
+//     printf("\nTotal: %d\n", count);
+
+//     // Repush back to stack, count down from count
+//     for(int i = count; i >= 0; i--) {
+//         // printf("Pushback:%d\n", i);
+//         TM_TaskPush((void*)(taskArray[i]->data), ver);
+//         // free(taskArray[count]);
+//     }
+//     // free(taskArray);
+// }
 
 
 /* =============================================================================
@@ -322,7 +356,10 @@ createPartition (long min, long max, long id, long n,
 static void
 createTaskList (void* argPtr)
 {
+    /* Normal version */
     TM_THREAD_ENTER();
+    /* Romeo version */
+    // TM_THREAD_ENTER(0);
     long v;
 
     long v_start;
@@ -360,7 +397,7 @@ createTaskList (void* argPtr)
     vector_t* parentQueryVectorPtr = PVECTOR_ALLOC(1);
     assert(parentQueryVectorPtr);
 
-
+    // TODO: ShadowTask LOOP2TASK transform
     createPartition(0, numVar, myId, numThread, &v_start, &v_stop);
     //printf("Start: %lu, End: %lu\n", v_start, v_stop);
     /*
@@ -494,11 +531,11 @@ createTaskList (void* argPtr)
             taskPtr->toId = v;
             taskPtr->score = score;
             /* Bayes Push Task */
-            /*
-            TM_BEGIN();
-            status = TMLIST_INSERT(taskListPtr, (void*)taskPtr);
-            TM_END();
-            */
+            // TM_BEGIN();
+            // status = TMLIST_INSERT(taskListPtr, (void*)taskPtr);
+            // TM_END();
+            // ShadowTask version
+            // printf("TM_TaskPush: %d\n", taskPtr->op);
             TM_TaskPush((void*)taskPtr, 0);
 
             //assert(status);
@@ -1157,10 +1194,12 @@ TMfindBestReverseTask (TM_ARGDECL  findBestTaskArg_t* argPtr)
 static void
 learnStructure (void* argPtr)
 {
+    /* Normal version */
     TM_THREAD_ENTER();
-    //void* fptr = learnStructure;
-    //printf("fptr = %p\n", fptr);
-    TM_Coroutine(learnStructure, argPtr);
+
+    /* ShadowTask version */
+    // TM_THREAD_ENTER(11);
+    // TM_Coroutine(learnStructure, argPtr);
      
     //void* tx = TM_PROBE();
     //printf("argPtr[%p][%p]\n", tx, argPtr);
@@ -1212,8 +1251,10 @@ learnStructure (void* argPtr)
     arg.aQueryVectorPtr      = aQueryVectorPtr;
     arg.bQueryVectorPtr      = bQueryVectorPtr;
 
+    int counter = 0;
     while (1) {
-
+        counter++;
+        void* tmp;
         learner_task_t* taskPtr;
         // Bayes Task Pop.
         /*
@@ -1221,19 +1262,32 @@ learnStructure (void* argPtr)
         taskPtr = TMpopTask(TM_ARG  taskListPtr);
         TM_END();
         */
-        taskPtr = TM_TaskPop(0);
-        if (taskPtr == NULL) {
+
+        tmp = TM_TaskPop(0);
+        hs_task_t* hstaskPtr = (hs_task_t*)tmp;
+        
+        if (hstaskPtr == NULL) {
+            // printf("%lu: count:%d\n", pthread_self(), counter);
             break;
         }
-
+        taskPtr = (learner_task_t*)(hstaskPtr->data);
         //printf("taskPtr: %p\n", taskPtr);
-
+        
+        // Check stack op
+        // if(counter == 2) checkStack(0);
+        
+        
         operation_t op = taskPtr->op;
+        /* FIXME: FIND OUT WHAT MAKES op == 3 ???/*/
+        if (op==3) {
+            // printf("OP=3%lu: count:%d\n", pthread_self(), counter);
+            break;
+        }
         long fromId = taskPtr->fromId;
         long toId = taskPtr->toId;
 
         bool_t isTaskValid;
-        //printf("op: %d\n", op);
+        // printf("op: %d\n", op);
         TM_BEGIN();
 
         /*
@@ -1275,6 +1329,11 @@ learnStructure (void* argPtr)
             default:
                 assert(0);
         }
+        // ShadowTask
+        // printf("[task] op=%i from=%li to=%li score=%lf valid=%s\n",
+        //        taskPtr->op, taskPtr->fromId, taskPtr->toId, taskPtr->score,
+        //        (isTaskValid ? "yes" : "no"));
+        // fflush(stdout);
 
 #ifdef TEST_LEARNER
         printf("[task] op=%i from=%li to=%li score=%lf valid=%s\n",
@@ -1492,12 +1551,14 @@ learnStructure (void* argPtr)
         if (bestTask.toId != -1) {
             learner_task_t* tasks = learnerPtr->tasks;
             tasks[toId] = bestTask;
-            /*
-            TM_BEGIN();
-            TMLIST_INSERT(taskListPtr, (void*)&tasks[toId]);
-            TM_END();
-            */
-           TM_TaskPush((void*)&tasks[toId], 0);
+            
+            // TM_BEGIN();
+            // TMLIST_INSERT(taskListPtr, (void*)&tasks[toId]);
+            // TM_END();
+            
+            // ShadowTask
+            TM_TaskPush((void*)&bestTask, 0);
+        //    printf("TM_TaskPush_best: [op:%d]\n", bestTask.op);
 #ifdef TEST_LEARNER
             printf("[new]  op=%i from=%li to=%li score=%lf\n",
                    bestTask.op, bestTask.fromId, bestTask.toId, bestTask.score);

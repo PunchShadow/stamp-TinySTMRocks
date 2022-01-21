@@ -94,6 +94,10 @@
 #include "timer.h"
 #include "tm.h"
 #include "util.h"
+#include "utility.h"
+
+// extern int global_record[32];
+
 
 double global_time = 0.0;
 
@@ -111,7 +115,18 @@ typedef struct args {
 float global_delta;
 long global_i; /* index into task queue */
 
+
 #define CHUNK 3
+
+
+
+/** ============================================================================
+ *  ShadowTask Function
+ *  ============================================================================
+*/
+
+
+
 
 
 /* =============================================================================
@@ -121,7 +136,11 @@ long global_i; /* index into task queue */
 static void
 work (void* argPtr)
 {
-    TM_THREAD_ENTER();
+    int max_tx = 0;
+    // TM_THREAD_ENTER(max_tx); /* Romeo version */
+    TM_THREAD_ENTER(); /* normal version */
+    // ShadowTask
+    // TM_Coroutine(work, argPtr);
 
     args_t* args = (args_t*)argPtr;
     float** feature         = args->feature;
@@ -139,23 +158,41 @@ work (void* argPtr)
     int start;
     int stop;
     int myId;
+    int g_r = 0;
+
 
     myId = thread_getId();
 
-    start = myId * CHUNK;
+    /* ShadowTask version */
+    int numThread = (int)thread_getNumThread();
+    int chunk = MAX(1, ((npoints + numThread/2) / numThread));
+    start = myId * chunk;
+    // printf("npoints:%d\n", npoints);
+    stop = (((start + chunk) < npoints) ? (start + chunk) : npoints);
+    printf("[%d] start:%d, stop:%d\n", myId, start, stop);
 
-    while (start < npoints) {
-        stop = (((start + CHUNK) < npoints) ? (start + CHUNK) : npoints);
+
+    TM_LOOP2TASK(start, stop, 10, 0, NULL);
+
+    int num_euc = 0;
+    while(1) {
+
+        hs_task_t* taskPtr = (hs_task_t*)TM_TaskPop(0);
+        if (taskPtr == NULL) break;
+
+        start = (int)(taskPtr->start);
+        stop = (int)(taskPtr->end);
+        // printf("start:%d, stop:%d\n", start, stop);
         for (i = start; i < stop; i++) {
-
             index = common_findNearestPoint(feature[i],
                                             nfeatures,
                                             clusters,
-                                            nclusters);
+                                            nclusters,
+                                            &num_euc);
             /*
-             * If membership changes, increase delta by 1.
-             * membership[i] cannot be changed by other threads
-             */
+            * If membership changes, increase delta by 1.
+            * membership[i] cannot be changed by other threads
+            */
             if (membership[i] != index) {
                 delta += 1.0;
             }
@@ -175,22 +212,65 @@ work (void* argPtr)
                 );
             }
             TM_END();
-        }
-
-        /* Update task queue */
-        if (start + CHUNK < npoints) {
-            TM_BEGIN();
-            start = (int)TM_SHARED_READ(global_i);
-            TM_SHARED_WRITE(global_i, (start + CHUNK));
-            TM_END();
-        } else {
-            break;
+            // loop_counter++;
+            // global_record[myId] += num_euc;
+            num_euc = 0;
         }
     }
+
+    /* Normal version */
+    // while (start < npoints) {
+    //     stop = (((start + CHUNK) < npoints) ? (start + CHUNK) : npoints);
+    //     for (i = start; i < stop; i++) {        
+
+    //         index = common_findNearestPoint(feature[i],
+    //                                         nfeatures,
+    //                                         clusters,
+    //                                         nclusters);
+    //         /*
+    //          * If membership changes, increase delta by 1.
+    //          * membership[i] cannot be changed by other threads
+    //          */
+    //         if (membership[i] != index) {
+    //             delta += 1.0;
+    //         }
+
+    //         /* Assign the membership to object i */
+    //         /* membership[i] can't be changed by other thread */
+    //         membership[i] = index;
+
+    //         /* Update new cluster centers : sum of objects located within */
+    //         TM_BEGIN();
+    //         TM_SHARED_WRITE(*new_centers_len[index],
+    //                         TM_SHARED_READ(*new_centers_len[index]) + 1);
+    //         for (j = 0; j < nfeatures; j++) {
+    //             TM_SHARED_WRITE_F(
+    //                 new_centers[index][j],
+    //                 (TM_SHARED_READ_F(new_centers[index][j]) + feature[i][j])
+    //             );
+    //         }
+    //         TM_END();
+    //     }
+    //     // Normal version
+    //     /* Update task queue */
+    //     if (start + CHUNK < npoints) {
+    //         TM_BEGIN();
+    //         start = (int)TM_SHARED_READ(global_i);
+    //         TM_SHARED_WRITE(global_i, (start + CHUNK));
+    //         TM_END();
+    //     } else {
+    //         break;
+    //     }
+
+    // }
 
     TM_BEGIN();
     TM_SHARED_WRITE_F(global_delta, TM_SHARED_READ_F(global_delta) + delta);
     TM_END();
+
+    // printf("[%lu] loop_counter:%d\n", myId, loop_counter);
+
+    // TM_TASK_EXIT();
 
     TM_THREAD_EXIT();
 }

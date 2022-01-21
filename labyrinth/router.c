@@ -353,7 +353,11 @@ PdoTraceback (grid_t* gridPtr, grid_t* myGridPtr,
 void
 router_solve (void* argPtr)
 {
+    /* normal version */
     TM_THREAD_ENTER();
+    /* Romeo version */
+    // TM_THREAD_ENTER(2);
+    // TM_Coroutine(router_solve, argPtr);
 
     router_solve_arg_t* routerArgPtr = (router_solve_arg_t*)argPtr;
     router_t* routerPtr = routerArgPtr->routerPtr;
@@ -376,16 +380,23 @@ router_solve (void* argPtr)
     while (1) {
 
         pair_t* coordinatePairPtr;
-        TM_BEGIN();
-        if (TMQUEUE_ISEMPTY(workQueuePtr)) {
-            coordinatePairPtr = NULL;
-        } else {
-            coordinatePairPtr = (pair_t*)TMQUEUE_POP(workQueuePtr);
-        }
-        TM_END();
-        if (coordinatePairPtr == NULL) {
-            break;
-        }
+
+        /* Normal version - labyrinth task pop */
+        // TM_BEGIN();
+        // if (TMQUEUE_ISEMPTY(workQueuePtr)) {
+        //     coordinatePairPtr = NULL;
+        // } else {
+        //     coordinatePairPtr = (pair_t*)TMQUEUE_POP(workQueuePtr);
+        // }
+        // TM_END();
+        // if (coordinatePairPtr == NULL) {
+        //     break;
+        // }
+
+        /* ShadowTask version - task pop */
+        hs_task_t* taskPtr = TM_TaskPop(0);
+        if (taskPtr == NULL) break;
+        coordinatePairPtr = (pair_t*)(taskPtr->data);
 
         coordinate_t* srcPtr = coordinatePairPtr->firstPtr;
         coordinate_t* dstPtr = coordinatePairPtr->secondPtr;
@@ -433,7 +444,7 @@ router_solve (void* argPtr)
     puts("\nFinal Grid:");
     grid_print(gridPtr);
 #endif /* DEBUG */
-
+    // TM_TASK_EXIT();
     TM_THREAD_EXIT();
 }
 

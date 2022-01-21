@@ -236,7 +236,8 @@ sequencer_alloc (long geneLength, long segmentLength, segments_t* segmentsPtr)
 void
 RemovDuplicateSegments(void* argPtr)
 {
-    TM_TASK_ENTER();
+    /* ShadowTask version */
+    // TM_THREAD_ENTER(0);
     // TM_Coroutine(RemovDuplicateSegments, argPtr);
 
     sequencer_t* sequencerPtr = (sequencer_t*)argPtr;
@@ -267,13 +268,14 @@ RemovDuplicateSegments(void* argPtr)
         }
         TM_END();
     }
-    // TM_TASK_EXIT();
+    // TM_THREAD_EXIT();
 }
 
 void
 UniqueSegmentsComputeHashes(void* argPtr, long* entryIndex)
 {
-    TM_TASK_ENTER();
+    /* ShadowTask version */
+    // TM_THREAD_ENTER(3);
     // TM_Coroutine(UniqueSegmentsComputeHashes, argPtr);
     
     // Parse the argPtr
@@ -321,6 +323,7 @@ UniqueSegmentsComputeHashes(void* argPtr, long* entryIndex)
             constructEntryPtr = &constructEntries[*entryIndex];
             TM_SHARED_WRITE_P(constructEntryPtr->segment, segment);
             TM_END();
+            assert(constructEntryPtr->segment);
             *entryIndex = (*entryIndex + 1) % numUniqueSegment;
 
             /*
@@ -362,7 +365,7 @@ UniqueSegmentsComputeHashes(void* argPtr, long* entryIndex)
         }
     }
     // printf("++> Finishing UniqueSeg\n");
-    // TM_TASK_EXIT();
+    // TM_THREAD_EXIT();
 }
 
 /*
@@ -395,7 +398,10 @@ MatchEndsToStarts(void* argPtr)
 void
 sequencer_run (void* argPtr)
 {
+    /* Normal version */
     TM_THREAD_ENTER();
+    /* Romeo version */
+    // TM_THREAD_ENTER(0);
 
     long threadId = thread_getId();
 
@@ -584,11 +590,12 @@ sequencer_run (void* argPtr)
 
     // ShadowTask version - 2 
     TM_LOOP2TASK(i_start, i_stop, 1, 1, NULL);
+    // TM_THREAD_EXIT();
     UniqueSegmentsComputeHashes(argPtr, &entryIndex);
     
     
     thread_barrier_wait();
-
+    // TM_THREAD_ENTER(0);
     /*
      * Step 2b: Match ends to starts by using hash-based string comparison.
      */

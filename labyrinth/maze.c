@@ -269,7 +269,11 @@ maze_read (maze_t* mazePtr, char* inputFileName)
     list_iter_reset(&it, workListPtr);
     while (list_iter_hasNext(&it, workListPtr)) {
         pair_t* coordinatePairPtr = (pair_t*)list_iter_next(&it, workListPtr);
-        queue_push(workQueuePtr, (void*)coordinatePairPtr);
+        /* normal version - labyrinth task push */
+        // queue_push(workQueuePtr, (void*)coordinatePairPtr);
+        
+        /* ShadowTask version - task push */
+        TM_TaskSplit((void*)coordinatePairPtr, 0);
     }
     list_free(workListPtr);
 

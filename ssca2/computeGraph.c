@@ -145,6 +145,88 @@ prefix_sums (ULONGINT_T* result, LONGINT_T* input, ULONGINT_T arraySize)
 }
 
 
+/** ============================================================================
+ *  ShadowTask Function
+ *  ============================================================================
+*/
+/* Wrap all input arguments to a structure */
+typedef struct taskArg {
+    ULONGINT_T* impliedEdgeList;
+    ULONGINT_T** auxArr;
+    void* argPtr;
+} taskArg_t;
+
+
+void
+InspectAdjacencyListOfVertex(void* taskArgPtr)
+{
+    /* Romeo version */
+    // TM_THREAD_ENTER(1);
+    /* Normal version */
+    TM_THREAD_ENTER();
+
+    // FIXME: Coroutine parameters issue
+    // TM_Coroutine(InspectAdjacencyListOfVertex, taskArgPtr);
+    taskArg_t* taskArg = (taskArg_t*)taskArgPtr;
+    ULONGINT_T* impliedEdgeList = taskArg->impliedEdgeList;
+    ULONGINT_T** auxArr = taskArg->auxArr;
+    graph* GPtr = ((computeGraph_arg_t*)taskArg->argPtr)->GPtr;
+
+    while(1) {
+        hs_task_t* taskPtr = TM_TaskPop(0);
+        if (taskPtr == NULL) break;
+        long i,j;
+        i = (long)taskPtr->start; 
+
+
+        /* Inspect adjacency list of vertex i */
+        for (j = GPtr->outVertexIndex[i];
+            j < (GPtr->outVertexIndex[i] + GPtr->outDegree[i]);
+            j++)
+        {
+            ULONGINT_T v = GPtr->outVertexList[j];
+            ULONGINT_T k;
+            for (k = GPtr->outVertexIndex[v];
+                k < (GPtr->outVertexIndex[v] + GPtr->outDegree[v]);
+                k++)
+            {
+                if (GPtr->outVertexList[k] == i) {
+                    break;
+                }
+            }
+            if (k == GPtr->outVertexIndex[v]+GPtr->outDegree[v]) {
+                TM_BEGIN();
+                /* Add i to the impliedEdgeList of v */
+                long inDegree = (long)TM_SHARED_READ(GPtr->inDegree[v]);
+                TM_SHARED_WRITE(GPtr->inDegree[v], (inDegree + 1));
+                if (inDegree < MAX_CLUSTER_SIZE) {
+                    TM_SHARED_WRITE(impliedEdgeList[v*MAX_CLUSTER_SIZE+inDegree],
+                                    i);
+                } else {
+                    /* Use auxiliary array to store the implied edge */
+                    /* Create an array if it's not present already */
+                    ULONGINT_T* a = NULL;
+                    if ((inDegree % MAX_CLUSTER_SIZE) == 0) {
+                        a = (ULONGINT_T*)TM_MALLOC(MAX_CLUSTER_SIZE
+                                                * sizeof(ULONGINT_T));
+                        assert(a);
+                        TM_SHARED_WRITE_P(auxArr[v], a);
+                    } else {
+                        a = auxArr[v];
+                    }
+                    TM_SHARED_WRITE(a[inDegree % MAX_CLUSTER_SIZE], i);
+                }
+                TM_END();
+            }
+        }
+    }
+    /* Romeo */
+    TM_THREAD_EXIT();
+}
+
+
+
+
 /* =============================================================================
  * computeGraph
  * =============================================================================
@@ -152,7 +234,10 @@ prefix_sums (ULONGINT_T* result, LONGINT_T* input, ULONGINT_T arraySize)
 void
 computeGraph (void* argPtr)
 {
+    /* normal version */
     TM_THREAD_ENTER();
+    /* Romeo version */
+    // TM_THREAD_ENTER(0);
 
     graph*    GPtr       = ((computeGraph_arg_t*)argPtr)->GPtr;
     graphSDG* SDGdataPtr = ((computeGraph_arg_t*)argPtr)->SDGdataPtr;
@@ -455,48 +540,58 @@ computeGraph (void* argPtr)
 
     createPartition(0, GPtr->numVertices, myId, numThread, &i_start, &i_stop);
 
-    for (i = i_start; i < i_stop; i++) {
-        /* Inspect adjacency list of vertex i */
-        for (j = GPtr->outVertexIndex[i];
-             j < (GPtr->outVertexIndex[i] + GPtr->outDegree[i]);
-             j++)
-        {
-            ULONGINT_T v = GPtr->outVertexList[j];
-            ULONGINT_T k;
-            for (k = GPtr->outVertexIndex[v];
-                 k < (GPtr->outVertexIndex[v] + GPtr->outDegree[v]);
-                 k++)
-            {
-                if (GPtr->outVertexList[k] == i) {
-                    break;
-                }
-            }
-            if (k == GPtr->outVertexIndex[v]+GPtr->outDegree[v]) {
-                TM_BEGIN();
-                /* Add i to the impliedEdgeList of v */
-                long inDegree = (long)TM_SHARED_READ(GPtr->inDegree[v]);
-                TM_SHARED_WRITE(GPtr->inDegree[v], (inDegree + 1));
-                if (inDegree < MAX_CLUSTER_SIZE) {
-                    TM_SHARED_WRITE(impliedEdgeList[v*MAX_CLUSTER_SIZE+inDegree],
-                                    i);
-                } else {
-                    /* Use auxiliary array to store the implied edge */
-                    /* Create an array if it's not present already */
-                    ULONGINT_T* a = NULL;
-                    if ((inDegree % MAX_CLUSTER_SIZE) == 0) {
-                        a = (ULONGINT_T*)TM_MALLOC(MAX_CLUSTER_SIZE
-                                                   * sizeof(ULONGINT_T));
-                        assert(a);
-                        TM_SHARED_WRITE_P(auxArr[v], a);
-                    } else {
-                        a = auxArr[v];
-                    }
-                    TM_SHARED_WRITE(a[inDegree % MAX_CLUSTER_SIZE], i);
-                }
-                TM_END();
-            }
-        }
-    } /* for i */
+    /* ShadowTask version -  */
+    TM_LOOP2TASK(i_start, i_stop, 1, 0, NULL);
+    taskArg_t *taskArgPtr = malloc(sizeof(taskArg_t));
+    taskArgPtr->impliedEdgeList = impliedEdgeList;
+    taskArgPtr->auxArr = auxArr;
+    taskArgPtr->argPtr = argPtr;
+    InspectAdjacencyListOfVertex((void*)taskArgPtr);
+
+
+    /* normal version -  ssca repeat part */
+    // for (i = i_start; i < i_stop; i++) {
+    //     /* Inspect adjacency list of vertex i */
+    //     for (j = GPtr->outVertexIndex[i];
+    //          j < (GPtr->outVertexIndex[i] + GPtr->outDegree[i]);
+    //          j++)
+    //     {
+    //         ULONGINT_T v = GPtr->outVertexList[j];
+    //         ULONGINT_T k;
+    //         for (k = GPtr->outVertexIndex[v];
+    //              k < (GPtr->outVertexIndex[v] + GPtr->outDegree[v]);
+    //              k++)
+    //         {
+    //             if (GPtr->outVertexList[k] == i) {
+    //                 break;
+    //             }
+    //         }
+    //         if (k == GPtr->outVertexIndex[v]+GPtr->outDegree[v]) {
+    //             TM_BEGIN();
+    //             /* Add i to the impliedEdgeList of v */
+    //             long inDegree = (long)TM_SHARED_READ(GPtr->inDegree[v]);
+    //             TM_SHARED_WRITE(GPtr->inDegree[v], (inDegree + 1));
+    //             if (inDegree < MAX_CLUSTER_SIZE) {
+    //                 TM_SHARED_WRITE(impliedEdgeList[v*MAX_CLUSTER_SIZE+inDegree],
+    //                                 i);
+    //             } else {
+    //                 /* Use auxiliary array to store the implied edge */
+    //                 /* Create an array if it's not present already */
+    //                 ULONGINT_T* a = NULL;
+    //                 if ((inDegree % MAX_CLUSTER_SIZE) == 0) {
+    //                     a = (ULONGINT_T*)TM_MALLOC(MAX_CLUSTER_SIZE
+    //                                                * sizeof(ULONGINT_T));
+    //                     assert(a);
+    //                     TM_SHARED_WRITE_P(auxArr[v], a);
+    //                 } else {
+    //                     a = auxArr[v];
+    //                 }
+    //                 TM_SHARED_WRITE(a[inDegree % MAX_CLUSTER_SIZE], i);
+    //             }
+    //             TM_END();
+    //         }
+    //     }
+    // } /* for i */
 
     thread_barrier_wait();
 

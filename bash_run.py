@@ -6,6 +6,7 @@ import re
 import subprocess
 import tempfile
 import math
+import sys
 from tqdm import tqdm
 
 
@@ -14,23 +15,46 @@ parser.add_argument("-o", "--output",
                     help='Output file path.')
 parser.add_argument("-r", "--repeat", type=int,
                     help="Repeat time per benchmark.")
-parser.add_argument("-m", "--max_thread", type=int,
+parser.add_argument("--max_thread", type=int,
                     help="Maxium numbers of thread usage. Must be even number.")
+parser.add_argument("--min_thread", type=int, default=1,
+                    help="Minimum numbers of thread usage, Must be power of 2 (default:1)")
 parser.add_argument("-perf", action='store_true',
                     help="Use perf probe on each benchmarks")
 parser.add_argument("-sim", action='store_true',
                     help="Choose to run simulation or not, default is not.")
 parser.add_argument("-debug", action='store_true',
                     help="To print debug information or not.")
+parser.add_argument("-s", "--specific",
+                    default="all",
+                    help="Only test the specific benchmark (default: all).")
+parser.add_argument("-e", "--error", action="store_true",
+                    help="Reexecute the 0 execution benchmarks and print error message")
+parser.add_argument("-st", "--statistic", action="store_true",
+                    help="Write down statistic report to another statistic file: <outputfile_statistics.txt> (default: false)")
+
+
+
 
 args = parser.parse_args()
 
+dic = ['bayes', 'genome', 'intruder', 'kmeans', 'labyrinth', 'ssca2', 'vacation', 'yada']
+cmds_index = ['bayes', 'genome', 'intruder', 'kmeans_high', 'kmeans_low', 'labyrinth', 'ssca2', 'vacation_high', 
+             'vacation_low', 'yada']
 # Check all the arguments are set.
 assert args.output != None, "Output file path should be added!"
 assert args.repeat != None, "Repeat time lost!"
 assert args.max_thread != None, "Need to allocate max thread number!"
+assert math.log(args.max_thread, 2).is_integer(), "Max_thread must be power of 2!"
+assert math.log(args.min_thread, 2).is_integer(), "Min thread must be power of 2!"
 assert (args.max_thread & (args.max_thread - 1) == 0 and args.max_thread != 0), "Max thread number should be power of 2!"
+if (args.specific != "all"): 
+    assert args.specific in cmds_index, "Specific benchmark name error! [bayes, genome, intruder, kmeans_high, kmeans_low, labyrinth, ssca2, vacation_high, vacation_low, ssca2]"
+    specific_bench = args.specific
+else:
+    specific_bench = "all"
 
+sys.setrecursionlimit(3000)
 
 ROOT = os.path.abspath(os.getcwd())
 
@@ -45,9 +69,8 @@ ROOT = os.path.abspath(os.getcwd())
     vacation: no thread parameter
     yada: -t: thread
 """
-dic = ['bayes', 'genome', 'intruder', 'kmeans', 'labyrinth', 'ssca2', 'vacation', 'yada']
-cmds_index = ['bayes', 'genome', 'intruder', 'kmeans_high', 'kmeans_low', 'labyrinth', 'ssca2', 'vacation_high', 
-             'vacation_low', 'yada']
+
+
 # Non-simulated commands
 cmds = {
     "bayes": "./bayes.stm -v32 -r4096 -n10 -p40 -i2 -e8 -s1 -t",
@@ -81,7 +104,9 @@ cmds_sim = {
 for ele in dic:
     print('cd '+ele)
     #os.system('cd '+ele)
-    os.chdir(ele)
+    # use absolute path instead of related path
+    des_dir = ROOT + "/" + ele
+    os.chdir(des_dir)
     os.system('make -f Makefile.stm clean')
     os.system('make -f Makefile.stm')
     os.chdir(ROOT)
@@ -124,52 +149,104 @@ def execute_and_count(cmd, index):
         tempf.seek(0)
         exe_time = [0]
         match_lines = []
+        statistic_list = [] # [[total_nb_commits, total_nb_aborts, commit_rate], [],...]
+        output_tmp = []
+        nb_commits = 0
+        nb_aborts = 0
+        commit_rate = 0
         # Find time
         for line in tempf.readlines():
+            # Print original output if debug flag
+            if args.debug:
+                print(str(line))
+            if args.error:
+                output_tmp.append(line)
+            # Search time relative parameters
             time = re.search(r'(?i)time', str(line))
             if time is not None:
+                if (re.search(r'(?i)Adtree', str(line))): # Omit adtree time in bayes
+                    continue 
                 match_lines.append(str(line))
                 exe_time.append(float(re.findall(r"[-+]?\d*\.\d+|\d+", str(line))[0]))
                 # Exception handle for ssca2, overlap the order time
                 if re.search(r'Time taken for all is', str(line)) is not None:
                     exe_time = re.findall(r"[-+]?\d*\.\d+|\d+", str(line))
                 #print(line)
-        exe_sum = sum([float(x) for x in exe_time])
+
+            # Other parameters search
+            if args.statistic:
+                total_nb_commits = re.search(r'(?i)total_nb_commits', str(line))
+                if total_nb_commits is not None:
+                    # match_lines.append(str(line))
+                    nb_commits = int(re.findall(r"[-+]?\d*\.\d+|\d+", str(line))[0])
+                
+                total_nb_aborts = re.search(r'(?i)total_nb_aborts', str(line))
+                if total_nb_aborts is not None:
+                    # match_lines.append(str(line))
+                    nb_aborts = int(re.findall(r"[-+]?\d*\.\d+|\d+", str(line))[0])     
+                
+                commit_rate = re.search(r'(?i)commit_rate', str(line))
+                if commit_rate is not None:
+                    # match_lines.append(str(line))
+                    commit_rate = float(re.findall(r"[-+]?\d*\.\d+|\d+", str(line))[0])  
+
+        exe_sum = sum([float(x) for x in exe_time])        
+        if args.statistic:
+            statistic_list = [nb_commits, nb_aborts]
+        
+        # Exclude 0 execution time and restart
+        if args.error:
+            # If find the 0 execution time
+            if exe_sum == 0:
+                # Print error message
+                for ele in output_tmp:
+                    print(ele)
+                # Re-execute this benchmarks
+                execute_and_count(cmd, index)
+                # End this function call
+                return
+        # Debug mode: reveal original executed result & captured time
         if args.debug:
             print("cmd: ", cmd)
             print("match line: ", match_lines )
             print("exe_time: ", exe_time)
             print("exe_sum: ", exe_sum)
-
+            if args.statistic:
+                print("statistic: ", statistic_list)
+            print("-----------------------------------------------------------------------")
         
-    """
-    start_time = time.time()
-    os.system(cmd)
-    end_time = time.time()
-    exe_time = end_time - start_time
-    """
+    # Record the execution time1
     exe_time_dic[index].append(exe_sum)
+    if args.statistic:
+        statistic_dic[index].append(statistic_list)
  
 
 
-
+# Thread number & repeat time
 max_thread_num = args.max_thread
+min_thread_num = args.min_thread
 times = args.repeat
 
 
 # exe_time_dic = { 'kmeans': [], ... }
 exe_time_dic = {}
+statistic_dic = {}
 
 for bench in cmds_index:
     exe_time_dic[bench] = []
+    statistic_dic[bench] = []
 
 exe_time_dic['kmeans_high'] = []
 exe_time_dic['kmeans_low'] = []
 exe_time_dic['vacation_high'] = []
 exe_time_dic['vacation_low'] = []
+statistic_dic['kmeans_high'] = []
+statistic_dic['kmeans_low'] = []
+statistic_dic['vacation_high'] = []
+statistic_dic['vacation_low'] = []
 
 high_flag = 0
-thread_batch_times = (2**i for i in range(0, int(math.log(max_thread_num, 2))+1))
+thread_batch_times = (2**i for i in range(int(math.log(min_thread_num,2)), int(math.log(max_thread_num, 2))+1))
 
 # Progress bar
 tqdm_times = times*len(cmds_index)*math.log(max_thread_num, 2)
@@ -179,13 +256,30 @@ with tqdm(total=tqdm_times) as pbar:
             for bench in dic:
                 os.chdir(bench)
                 index = bench
+
+                # Special case handling: kmeans & vacaction
                 if bench == 'kmeans' or bench == 'vacation':
                     high_cmd = cmds[index + '_high']
                     low_cmd = cmds[index + '_low']
                     high_cmd += str(thread_num)
                     low_cmd += str(thread_num)
+                    
+                    # Specific bench feature
+                    if (specific_bench != "all" and specific_bench != (index + '_high') and specific_bench != (index + '_low')):
+                        os.chdir(ROOT)
+                        # Skip the execution of kmeans and vaction
+                        continue
+
+                    print(high_cmd)
+                    print(low_cmd)
                     execute_and_count(high_cmd, index + '_high')
                     execute_and_count(low_cmd, index + '_low')
+                    os.chdir(ROOT)
+                    continue
+
+                # Specific bench feature
+                elif (specific_bench != "all" and index != specific_bench):
+                    # Skip the execution of non-specific benchmarks & jump to ROOT
                     os.chdir(ROOT)
                     continue
 
@@ -198,7 +292,10 @@ with tqdm(total=tqdm_times) as pbar:
 
 # Record to file and caculate averages
 avg_list = []
-with open(args.output, 'w') as f:
+output_file = (args.output).split(".", 1)[0] + '_' + str(min_thread_num) + '-' + str(max_thread_num) + '.txt'
+statistic_file = output_file.split(".", 1)[0] + "_statistics.txt"
+
+with open(output_file, 'w') as f:
     count = 0
     exe_sum = 0
     f.write("Times: " + str(times) + "\n")
@@ -220,6 +317,39 @@ with open(args.output, 'w') as f:
             f.write(str(avg)+ ',')
         f.write("\n")
         avg_list = []
+    
+# Write down the statistic result to file
+if args.statistic:
+    with open(statistic_file, "w") as f:
+        total_commits = 0
+        total_aborts = 0
+        counter = 0
+        avg_commit_list = []
+        avg_abort_list = []
+        f.write("Times: " + str(times) + "\n")
+        for key, val in statistic_dic.items():
+            f.write("Benchmarks: " + str(key) + "\n")
+            for stat_pair in val:
+                f.write(str(stat_pair) + ", ")
+                total_commits += stat_pair[0]
+                total_aborts += stat_pair[1]
+                if counter == (times-1):
+                    avg_commits = total_commits / times
+                    avg_aborts = total_aborts / times
+                    avg_commit_list.append(avg_commits)
+                    avg_abort_list.append(avg_aborts)
+                    counter = 0
+                    avg_commits = 0
+                    avg_aborts = 0
+                else:
+                    counter += 1
+            f.write("\n")
+            f.write("Average[#commit, #abort]: ")
+            for avg_pair in zip(avg_commit_list, avg_abort_list):
+                f.write(str(avg_pair) + ',')
+            f.write("\n")
+            avg_commit_list = []
+            avg_abort_list = []
 
 
 if __name__ == '__main__':

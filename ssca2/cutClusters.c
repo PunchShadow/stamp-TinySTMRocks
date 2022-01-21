@@ -99,8 +99,11 @@ static ULONGINT_T global_cutSetIndex = 0;
 void
 cutClusters (void* argPtr)
 {
+    /* normal version */
     TM_THREAD_ENTER();
-
+    /* Romeo version */
+    // TM_THREAD_ENTER(0);
+    
     graph* GPtr = (graph*)argPtr;
 
     long myId = thread_getId();

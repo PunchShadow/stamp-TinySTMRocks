@@ -387,6 +387,7 @@ TMdecoder_process (TM_ARGDECL  decoder_t* decoderPtr, char* bytes, long numByte)
                 long numByte = 0;
                 long i = 0;
                 TMLIST_ITER_RESET(&it, fragmentListPtr);
+                // FIXME: ShadowTask will trigger the inconsistency between fragmentPtr->fragmentId and i. 
                 while (TMLIST_ITER_HASNEXT(&it, fragmentListPtr)) {
                     packet_t* fragmentPtr =
                         (packet_t*)TMLIST_ITER_NEXT(&it, fragmentListPtr);
