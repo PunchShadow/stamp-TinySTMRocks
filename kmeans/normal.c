@@ -169,10 +169,10 @@ work (void* argPtr)
     start = myId * chunk;
     // printf("npoints:%d\n", npoints);
     stop = (((start + chunk) < npoints) ? (start + chunk) : npoints);
-    printf("[%d] start:%d, stop:%d\n", myId, start, stop);
+    // printf("[%d] start:%d, stop:%d\n", myId, start, stop);
 
 
-    TM_LOOP2TASK(start, stop, 10, 0, NULL);
+    TM_LOOP2TASK(start, stop, 50, 0, NULL);
 
     int num_euc = 0;
     while(1) {

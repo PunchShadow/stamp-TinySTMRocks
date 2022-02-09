@@ -9,16 +9,18 @@
 # Variables
 # ==============================================================================
 
-CFLAGS   += -DSTM -I$(STM)/include -I$(STM)/concurrentqueueu/c_api
+CFLAGS   += -DSTM -I$(STM)/include -I$(STM)/concurrentqueue/c_api
 CPPFLAGS := $(CFLAGS)
 LDFLAGS  += -L$(STM)/lib
 LDFLAGS  += -L$(STM)/pcm # PCM integral
-LDFLAGS  += -L$(STM)/concurrentqueueu/c_api # ctq
+LDFLAGS  += -L$(STM)/concurrentqueue/c_api # ctq
 LIBS     += -lstm
 LIBS     += -lPCM
+LIBS	 += -lctq
 # PCM wrapper
 PCMLIBS += wrapper.o cpucounters.o pci.o mmio.o client_bw.o utils.o topology.o
 PCMLIBS += dashboard.o debug.o threadpool.o resctrl.o msr.o -lrt
+
 
 
 # ==============================================================================

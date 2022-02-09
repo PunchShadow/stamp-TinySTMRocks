@@ -114,6 +114,7 @@ typedef struct arg {
     vector_t** errorVectors;
 } arg_t;
 
+long thread_num;
 
 /* =============================================================================
  * displayUsage
@@ -195,29 +196,30 @@ processPackets (void* argPtr)
     PDETECTOR_ADDPREPROCESSOR(detectorPtr, &preprocessor_toLower);
 
     vector_t* errorVectorPtr = errorVectors[threadId];
-
+    long long int count = 0;
     while (1) {
 
-        // char* bytes;
+        char* bytes;
+        count++;
         // TM_BEGIN();
         // // Intruder Task Pop
         // bytes = TMSTREAM_GETPACKET(streamPtr);
         // TM_END();
 
         // // ShadowTask
-        hs_task_t* taskPtr = TM_TaskPop(0);
+        hs_task_t* taskPtr = (hs_task_t*)TM_TaskPop(0);
         if (taskPtr == NULL) break;
-        char* bytes = (char*)(taskPtr->data);
+        bytes = (char*)(taskPtr->data);
 
-        // if (!bytes) {
-        //     break;
-        // }
+        if (!bytes) {
+            break;
+        }
 
 
         packet_t* packetPtr = (packet_t*)bytes;
         long flowId = packetPtr->flowId;
 
-        //printf("packetPtr->numFragment:%lu, flowId:%lu\n", packetPtr->numFragment, flowId);
+        // printf("[%lu]packetPtr->FragmentId:%lu, flowId:%lu\n",pthread_self(), packetPtr->fragmentId, flowId);
 
         error_t error;
         TM_BEGIN();
@@ -228,6 +230,7 @@ processPackets (void* argPtr)
         TM_END();
         // printf("error:%d\n", error);
         if (error) {
+            printf("[%lu] counter:%lld error\n",pthread_self(), count);
             /*
              * Currently, stream_generate() does not create these errors.
              */
@@ -276,6 +279,7 @@ MAIN(argc, argv)
     SIM_GET_NUM_CPU(numThread);
     TM_STARTUP(numThread);
     P_MEMORY_STARTUP(numThread);
+    thread_num = numThread;
     thread_startup(numThread);
 
     long percentAttack = global_params[PARAM_ATTACK];

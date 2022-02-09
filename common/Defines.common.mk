@@ -8,7 +8,7 @@
 CC       := gcc
 CFLAGS   += -Wall -pthread
 CFLAGS   += -O3
-CFLAGS	 += -g # Debuging flags
+# CFLAGS	 += -g # Debuging flags
 # CFLAGS	 += -O0
 CFLAGS   += -I$(LIB)
 CPP      := g++

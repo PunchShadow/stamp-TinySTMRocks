@@ -21,4 +21,5 @@ FlameGraph/
 *.svg
 *.perf
 *.folded
-
+bash_run.py
+*.sh

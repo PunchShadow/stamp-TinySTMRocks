@@ -577,7 +577,7 @@ TMpopTask (TM_ARGDECL  list_t* taskListPtr)
         bool_t status = TMLIST_REMOVE(taskListPtr, (void*)taskPtr);
         assert(status);
     }
-
+    // printf("==> TMpopTask: TaskPtr.op[%d]\n", taskPtr->op);
     return taskPtr;
 }
 
@@ -1257,20 +1257,21 @@ learnStructure (void* argPtr)
         void* tmp;
         learner_task_t* taskPtr;
         // Bayes Task Pop.
-        /*
         
-        taskPtr = TMpopTask(TM_ARG  taskListPtr);
-        TM_END();
-        */
+        // TM_BEGIN();
+        // taskPtr = TMpopTask(TM_ARG  taskListPtr);
+        // TM_END();
+        // if (taskPtr == NULL) break;
 
-        tmp = TM_TaskPop(0);
-        hs_task_t* hstaskPtr = (hs_task_t*)tmp;
+        tmp = TM_TaskPopRaw(0);
+        if (tmp == NULL) break;
+        taskPtr = (learner_task_t*)tmp;
         
-        if (hstaskPtr == NULL) {
-            // printf("%lu: count:%d\n", pthread_self(), counter);
-            break;
-        }
-        taskPtr = (learner_task_t*)(hstaskPtr->data);
+        // if (hstaskPtr == NULL) {
+        //     printf("%lu: count:%d\n", pthread_self(), counter);
+        //     break;
+        // }
+        // taskPtr = (learner_task_t*)(hstaskPtr->data);
         //printf("taskPtr: %p\n", taskPtr);
         
         // Check stack op
@@ -1280,8 +1281,8 @@ learnStructure (void* argPtr)
         operation_t op = taskPtr->op;
         /* FIXME: FIND OUT WHAT MAKES op == 3 ???/*/
         if (op==3) {
-            // printf("OP=3%lu: count:%d\n", pthread_self(), counter);
-            break;
+            printf("OP=3%lu: count:%d\n", pthread_self(), counter);
+            continue;
         }
         long fromId = taskPtr->fromId;
         long toId = taskPtr->toId;
@@ -1522,7 +1523,7 @@ learnStructure (void* argPtr)
             (newTask.score > (bestTask.score / operationQualityFactor)))
         {
             bestTask = newTask;
-        }
+        } else { }
 
 #ifdef LEARNER_TRY_REMOVE
         TM_BEGIN();
@@ -1547,8 +1548,9 @@ learnStructure (void* argPtr)
             bestTask = newTask;
         }
 #endif /* LEARNER_TRY_REVERSE */
+        // printf("bestTask.op[%d], toId[%ld]\n", bestTask.op, bestTask.toId);
         // Bayes Task Push
-        if (bestTask.toId != -1) {
+        if (bestTask.toId != -1) { /* Modify here !*/
             learner_task_t* tasks = learnerPtr->tasks;
             tasks[toId] = bestTask;
             
@@ -1557,8 +1559,8 @@ learnStructure (void* argPtr)
             // TM_END();
             
             // ShadowTask
-            TM_TaskPush((void*)&bestTask, 0);
-        //    printf("TM_TaskPush_best: [op:%d]\n", bestTask.op);
+            TM_TaskPush((void*)&tasks[toId], 0);
+            // printf("TM_TaskPush_best: [op:%d]\n", bestTask.op);
 #ifdef TEST_LEARNER
             printf("[new]  op=%i from=%li to=%li score=%lf\n",
                    bestTask.op, bestTask.fromId, bestTask.toId, bestTask.score);

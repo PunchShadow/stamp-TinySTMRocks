@@ -83,6 +83,7 @@
 #include "tm.h"
 #include "vector.h"
 
+extern long thread_num;
 
 struct stream {
     long percentAttack;
@@ -179,7 +180,7 @@ splitIntoPackets (char* str,
         status = queue_push(packetQueuePtr, (void*)packetPtr);
         assert(status);
         // // ShadowTask version
-        // TM_TaskSplit((void*)packetPtr, 0);
+        // TM_TaskSplit((void*)packetPtr, (p%thread_num) ,0);
     }
 
     bool_t status;
@@ -198,7 +199,7 @@ splitIntoPackets (char* str,
     status = queue_push(packetQueuePtr, (void*)packetPtr);
     assert(status);
     // ShadowTask version
-    // TM_TaskSplit((void*)packetPtr, 0);
+    // TM_TaskSplit((void*)packetPtr,(p%thread_num), 0);
 }
 
 
@@ -271,17 +272,19 @@ stream_generate (stream_t* streamPtr,
         splitIntoPackets(str, f, randomPtr, allocVectorPtr, packetQueuePtr);
     }
 
-    queue_shuffle(packetQueuePtr, randomPtr);
 
+    queue_shuffle(packetQueuePtr, randomPtr);
     // ShadowTask
     // Split packet in packetQueuePtr to task queue
     while(1) {
+
         void* packetPtr = queue_pop(packetQueuePtr);
         if (packetPtr == NULL) {
             break;
         }
         TM_TaskSplit(packetPtr, 0);
     }
+
     detector_free(detectorPtr);
 
     return numAttack;
