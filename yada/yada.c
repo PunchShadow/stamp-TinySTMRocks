@@ -207,11 +207,11 @@ process ()
 
     //printf("Enter thread: %d\n", tid);
     /* Normal version */
-    TM_THREAD_ENTER();
+    // TM_THREAD_ENTER();
     /* Romeo version */
-    // TM_THREAD_ENTER(6);
+    TM_THREAD_ENTER(6);
     /* ShadowTask version - coroutine */
-    // TM_Coroutine(process, global_workHeapPtr);
+    TM_Coroutine(process, global_workHeapPtr);
 
     heap_t* workHeapPtr = global_workHeapPtr;
     mesh_t* meshPtr = global_meshPtr;

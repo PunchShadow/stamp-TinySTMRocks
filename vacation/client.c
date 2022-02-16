@@ -156,11 +156,11 @@ void
 client_run (void* argPtr)
 {
     /* normal version */
-    TM_THREAD_ENTER();
+    // TM_THREAD_ENTER();
     /* Romeo version */
-    // TM_THREAD_ENTER(2);
+    TM_THREAD_ENTER(2);
     // ShadowTask version - coroutine
-    // TM_Coroutine(client_run, argPtr);
+    TM_Coroutine(client_run, argPtr);
 
     long myId = thread_getId();
     client_t* clientPtr = ((client_t**)argPtr)[myId];

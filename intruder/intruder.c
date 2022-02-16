@@ -181,10 +181,10 @@ void
 processPackets (void* argPtr)
 {
     /* normal version */
-    TM_THREAD_ENTER();
+    // TM_THREAD_ENTER();
     /* Romeo version */
-    // TM_THREAD_ENTER(2);
-    // TM_Coroutine(processPackets, argPtr);
+    TM_THREAD_ENTER(2);
+    TM_Coroutine(processPackets, argPtr);
     long threadId = thread_getId();
 
     stream_t*   streamPtr    = ((arg_t*)argPtr)->streamPtr;

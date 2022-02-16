@@ -92,9 +92,9 @@ void
 getStartLists (void* argPtr)
 {
     /* normal version */
-    TM_THREAD_ENTER();
+    // TM_THREAD_ENTER();
     /* Romeo version */
-    // TM_THREAD_ENTER(0);
+    TM_THREAD_ENTER(0);
 
     graph* GPtr                = ((getStartLists_arg_t*)argPtr)->GPtr;
     edge** maxIntWtListPtr     = ((getStartLists_arg_t*)argPtr)->maxIntWtListPtr;

@@ -354,10 +354,10 @@ void
 router_solve (void* argPtr)
 {
     /* normal version */
-    TM_THREAD_ENTER();
+    // TM_THREAD_ENTER();
     /* Romeo version */
-    // TM_THREAD_ENTER(2);
-    // TM_Coroutine(router_solve, argPtr);
+    TM_THREAD_ENTER(2);
+    TM_Coroutine(router_solve, argPtr);
 
     router_solve_arg_t* routerArgPtr = (router_solve_arg_t*)argPtr;
     router_t* routerPtr = routerArgPtr->routerPtr;

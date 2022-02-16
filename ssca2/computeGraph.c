@@ -161,12 +161,12 @@ void
 InspectAdjacencyListOfVertex(void* taskArgPtr)
 {
     /* Romeo version */
-    // TM_THREAD_ENTER(1);
+    TM_THREAD_ENTER(1);
     /* Normal version */
-    TM_THREAD_ENTER();
+    // TM_THREAD_ENTER();
 
     // FIXME: Coroutine parameters issue
-    // TM_Coroutine(InspectAdjacencyListOfVertex, taskArgPtr);
+    TM_Coroutine(InspectAdjacencyListOfVertex, taskArgPtr);
     taskArg_t* taskArg = (taskArg_t*)taskArgPtr;
     ULONGINT_T* impliedEdgeList = taskArg->impliedEdgeList;
     ULONGINT_T** auxArr = taskArg->auxArr;
@@ -235,9 +235,9 @@ void
 computeGraph (void* argPtr)
 {
     /* normal version */
-    TM_THREAD_ENTER();
+    // TM_THREAD_ENTER();
     /* Romeo version */
-    // TM_THREAD_ENTER(0);
+    TM_THREAD_ENTER(0);
 
     graph*    GPtr       = ((computeGraph_arg_t*)argPtr)->GPtr;
     graphSDG* SDGdataPtr = ((computeGraph_arg_t*)argPtr)->SDGdataPtr;

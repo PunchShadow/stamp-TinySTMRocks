@@ -137,10 +137,10 @@ static void
 work (void* argPtr)
 {
     int max_tx = 0;
-    // TM_THREAD_ENTER(max_tx); /* Romeo version */
-    TM_THREAD_ENTER(); /* normal version */
+    TM_THREAD_ENTER(max_tx); /* Romeo version */
+    // TM_THREAD_ENTER(); /* normal version */
     // ShadowTask
-    // TM_Coroutine(work, argPtr);
+    TM_Coroutine(work, argPtr);
 
     args_t* args = (args_t*)argPtr;
     float** feature         = args->feature;
