@@ -359,7 +359,7 @@ createTaskList (void* argPtr)
     /* Normal version */
     // TM_THREAD_ENTER();
     /* Romeo version */
-    TM_THREAD_ENTER(0);
+    TM_THREAD_ENTER(1, 0);
     long v;
 
     long v_start;
@@ -1198,7 +1198,7 @@ learnStructure (void* argPtr)
     // TM_THREAD_ENTER();
 
     /* ShadowTask version */
-    TM_THREAD_ENTER(11);
+    TM_THREAD_ENTER(11, 1);
     TM_Coroutine(learnStructure, argPtr);
      
     //void* tx = TM_PROBE();

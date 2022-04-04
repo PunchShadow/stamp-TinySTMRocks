@@ -209,7 +209,7 @@ process ()
     /* Normal version */
     // TM_THREAD_ENTER();
     /* Romeo version */
-    TM_THREAD_ENTER(6);
+    TM_THREAD_ENTER(6, 1);
     /* ShadowTask version - coroutine */
     TM_Coroutine(process, global_workHeapPtr);
 

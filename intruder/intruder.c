@@ -183,7 +183,7 @@ processPackets (void* argPtr)
     /* normal version */
     // TM_THREAD_ENTER();
     /* Romeo version */
-    TM_THREAD_ENTER(2);
+    TM_THREAD_ENTER(2, 1);
     TM_Coroutine(processPackets, argPtr);
     long threadId = thread_getId();
 

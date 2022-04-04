@@ -768,7 +768,7 @@ genScalData (void* argPtr)
     /* normal version */
     // TM_THREAD_ENTER();
     /* Romeo  version */
-    TM_THREAD_ENTER(0);
+    TM_THREAD_ENTER(4, 0);
 
     graphSDG* SDGdataPtr = (graphSDG*)argPtr;
 

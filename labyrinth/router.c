@@ -356,7 +356,7 @@ router_solve (void* argPtr)
     /* normal version */
     // TM_THREAD_ENTER();
     /* Romeo version */
-    TM_THREAD_ENTER(2);
+    TM_THREAD_ENTER(2, 1);
     TM_Coroutine(router_solve, argPtr);
 
     router_solve_arg_t* routerArgPtr = (router_solve_arg_t*)argPtr;

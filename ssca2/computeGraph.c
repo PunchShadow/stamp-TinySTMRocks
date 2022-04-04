@@ -161,7 +161,7 @@ void
 InspectAdjacencyListOfVertex(void* taskArgPtr)
 {
     /* Romeo version */
-    TM_THREAD_ENTER(1);
+    TM_THREAD_ENTER(1, 0);
     /* Normal version */
     // TM_THREAD_ENTER();
 
@@ -237,7 +237,7 @@ computeGraph (void* argPtr)
     /* normal version */
     // TM_THREAD_ENTER();
     /* Romeo version */
-    TM_THREAD_ENTER(0);
+    TM_THREAD_ENTER(2, 0);
 
     graph*    GPtr       = ((computeGraph_arg_t*)argPtr)->GPtr;
     graphSDG* SDGdataPtr = ((computeGraph_arg_t*)argPtr)->SDGdataPtr;
