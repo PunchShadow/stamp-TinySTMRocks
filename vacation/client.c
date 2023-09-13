@@ -181,7 +181,7 @@ client_run (void* argPtr)
     long i;
     long stop;
     // ShadowTask version - wrap_size = 20
-    TM_LOOP2TASK(0, numOperation, 20, 0, NULL);
+    TM_LOOP2TASK(0, numOperation, 100, 0, NULL);
 
 
     /* Normal version - vacation */

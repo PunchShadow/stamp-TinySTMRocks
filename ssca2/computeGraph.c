@@ -548,6 +548,7 @@ computeGraph (void* argPtr)
     taskArgPtr->argPtr = argPtr;
     InspectAdjacencyListOfVertex((void*)taskArgPtr);
 
+    TM_THREAD_ENTER(2, 0);
 
     /* normal version -  ssca repeat part */
     // for (i = i_start; i < i_stop; i++) {

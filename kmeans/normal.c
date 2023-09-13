@@ -171,7 +171,7 @@ work (void* argPtr)
     // printf("[%d] start:%d, stop:%d\n", myId, start, stop);
 
 
-    TM_LOOP2TASK(start, stop, 20, 0, NULL);
+    TM_LOOP2TASK(start, stop, 1, 0, NULL);
 
     int num_euc = 0;
     while(1) {
